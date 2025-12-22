@@ -36,6 +36,20 @@ export default function EntryDetailPage() {
   if (!entry && !isEntryLoading) {
     notFound();
   }
+  
+  if (!entry) {
+    return (
+        <div className="container mx-auto max-w-4xl text-center p-8">
+            <h1 className="text-2xl font-bold">Entrada no encontrada</h1>
+            <p className="text-muted-foreground mt-2">
+                La entrada que buscas no existe o ha sido eliminada.
+            </p>
+            <Button asChild className="mt-4">
+                <Link href="/">Volver al Dashboard</Link>
+            </Button>
+        </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-4xl print-container">
@@ -50,7 +64,7 @@ export default function EntryDetailPage() {
           <div>
             <h1 className="text-4xl font-headline font-bold text-foreground print-title">{entry?.bibleReference}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {entry?.createdAt ? `Creado el ${formatDate(entry.createdAt.toDate())}` : ''}
+              {entry?.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
             </p>
           </div>
           <div className="flex gap-2">

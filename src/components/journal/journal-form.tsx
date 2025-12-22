@@ -1,10 +1,9 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Form,
@@ -25,6 +24,7 @@ import type { JournalEntry } from '@/lib/types';
 import { useDebounce } from '@/lib/hooks/use-debounce';
 import { runFlow } from '@genkit-ai/next/client';
 import { verseAutocompletion } from '@/ai/flows/verse-autocompletion';
+import { addEntry, updateEntry } from '@/lib/actions';
 
 const FormSchema = z.object({
   bibleReference: z.string().min(3, 'La cita bíblica es requerida.'),
@@ -39,7 +39,6 @@ type JournalFormValues = z.infer<typeof FormSchema>;
 
 interface JournalFormProps {
   entry?: JournalEntry;
-  action: (prevState: any, formData: FormData) => Promise<any>;
 }
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
@@ -52,10 +51,10 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
   );
 }
 
-export default function JournalForm({ entry, action }: JournalFormProps) {
+export default function JournalForm({ entry }: JournalFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [initialState, formAction] = useFormState(action, { message: null, errors: {} });
+  const [isPending, startTransition] = useTransition();
   const isEditing = !!entry;
 
   const form = useForm<JournalFormValues>({
@@ -97,15 +96,37 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
     autocompleteVerse();
   }, [verseRefToAutocomplete, form, entry?.bibleReference, toast]);
 
-  useEffect(() => {
-    if (initialState.message && initialState.errors) {
-      toast({
-        variant: "destructive",
-        title: "Error al guardar",
-        description: initialState.message,
-      });
-    }
-  }, [initialState, toast]);
+  const onSubmit = (data: JournalFormValues) => {
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        if (entry?.id) {
+            formData.append('id', entry.id);
+        }
+        formData.append('bibleReference', data.bibleReference);
+        formData.append('verseText', data.verseText);
+        formData.append('observation', data.observation);
+        formData.append('teaching', data.teaching);
+        formData.append('application', data.application);
+        formData.append('tags', data.tags || '');
+
+        const action = isEditing ? updateEntry : addEntry;
+        await action(null, formData);
+
+        toast({
+          title: isEditing ? 'Entrada actualizada' : 'Entrada creada',
+          description: 'Tu entrada ha sido guardada exitosamente.',
+        });
+        // Redirect is handled by the server action
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: 'Error al guardar',
+          description: error.message || 'No se pudo guardar la entrada.',
+        });
+      }
+    });
+  };
 
   return (
     <Card>
@@ -117,9 +138,7 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form action={formAction} className="space-y-8">
-            <input type="hidden" name="id" value={entry?.id} />
-            
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <FormField
               control={form.control}
               name="bibleReference"
@@ -229,7 +248,10 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
               <Button type="button" variant="outline" onClick={() => router.back()}>
                 Cancelar
               </Button>
-              <SubmitButton isEditing={isEditing} />
+              <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
+              </Button>
             </div>
           </form>
         </Form>

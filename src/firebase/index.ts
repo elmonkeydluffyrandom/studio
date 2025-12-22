@@ -1,13 +1,16 @@
 'use client';
 
-import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  const isConfigProvided = Object.values(firebaseConfig).every(v => !!v);
+  const firebaseConfigStr = process.env.NEXT_PUBLIC_FIREBASE_CONFIG;
+  if (!firebaseConfigStr) {
+    throw new Error("Firebase config not found in environment variables. Make sure NEXT_PUBLIC_FIREBASE_CONFIG is set.");
+  }
+  const firebaseConfig = JSON.parse(firebaseConfigStr);
 
   if (getApps().length) {
     const app = getApp();
@@ -39,7 +42,8 @@ export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';
 export * from './firestore/use-doc';
-export * from './non-blocking-updates';
-export * from './non-blocking-login';
+export { useUser } from './auth/use-user';
 export * from './errors';
 export * from './error-emitter';
+export { setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from './non-blocking-updates';
+export { useMemoFirebase } from './provider';

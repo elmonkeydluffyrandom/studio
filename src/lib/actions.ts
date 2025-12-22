@@ -3,10 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { getFirestore, doc, addDoc, updateDoc, deleteDoc, getDoc, collection, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { doc, addDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase/index';
-import { getAuth } from 'firebase/auth';
-
 
 const FormSchema = z.object({
   id: z.string(),
@@ -71,14 +69,13 @@ export async function addEntry(prevState: State, formData: FormData) {
 
   try {
     const entriesCollection = collection(firestore, 'users', user.uid, 'entries');
-    await addDoc(entriesCollection, newEntry);
+    const docRef = await addDoc(entriesCollection, newEntry);
+    revalidatePath('/');
+    redirect(`/entry/${docRef.id}`);
   } catch(error) {
     console.error("Error adding document: ", error);
     return { message: 'Error al guardar en la base de datos.' };
   }
-
-  revalidatePath('/');
-  redirect('/');
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
@@ -130,11 +127,11 @@ export async function deleteEntry(id: string) {
   const user = auth.currentUser;
 
   if (!user) {
-    return { message: "Usuario no autenticado."};
+    throw new Error("Usuario no autenticado.");
   }
   
   if (!id) {
-    return { message: 'ID de entrada no proporcionado.' };
+    throw new Error('ID de entrada no proporcionado.');
   }
 
   try {
@@ -142,9 +139,8 @@ export async function deleteEntry(id: string) {
     await deleteDoc(entryRef);
   } catch(error) {
     console.error("Error deleting document: ", error);
-    return { message: 'Error al eliminar de la base de datos.' };
+    throw new Error('Error al eliminar de la base de datos.');
   }
 
   revalidatePath('/');
-  redirect('/');
 }

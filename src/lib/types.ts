@@ -8,5 +8,5 @@ export interface JournalEntry {
   teaching: string;
   application: string;
   tags: string[];
-  createdAt: Timestamp; 
+  createdAt: Timestamp | Date; 
 }
