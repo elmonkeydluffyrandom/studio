@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { doc, collection, Timestamp, getDoc } from 'firebase/firestore';
-import { initializeFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { doc, collection, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+import { addDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 
 const FormSchema = z.object({
@@ -62,26 +63,24 @@ export async function addEntry(prevState: State, formData: FormData) {
     teaching,
     practicalApplication,
     tagIds: tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
-    createdAt: Timestamp.now(),
+    createdAt: serverTimestamp(),
   };
 
   let newEntryId: string | undefined;
   try {
     const { firestore } = initializeFirebase();
     const entriesCollection = collection(firestore, 'users', userId, 'journalEntries');
-    const docRef = await addDocumentNonBlocking(entriesCollection, newEntry);
-    newEntryId = docRef?.id;
+    const docRef = await addDoc(entriesCollection, newEntry);
+    newEntryId = docRef.id;
   } catch(error: any) {
       console.error("Error adding document: ", error);
-      return { message: 'Error al guardar en la base de datos.' };
+      return { message: `Error al guardar en la base de datos: ${error.message}` };
   }
   
   if (newEntryId) {
     revalidatePath('/');
     redirect(`/entry/${newEntryId}`);
   } else {
-    // If for some reason we don't get an ID back, just go to the dashboard
-    // This might happen with non-blocking updates where the UI updates optimistically
     revalidatePath('/');
     redirect('/');
   }
@@ -114,14 +113,14 @@ export async function updateEntry(prevState: State, formData: FormData) {
   try {
     const { firestore } = initializeFirebase();
     const entryRef = doc(firestore, 'users', userId, 'journalEntries', id);
-    updateDocumentNonBlocking(entryRef, {
+    await setDoc(entryRef, {
       ...data,
       tagIds: data.tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
-      updatedAt: Timestamp.now()
-    });
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   } catch (error: any) {
       console.error("Error updating document: ", error);
-      return { message: 'Error al actualizar en la base de datos.' };
+      return { message: `Error al actualizar en la base de datos: ${error.message}` };
   }
 
   revalidatePath('/');
@@ -142,7 +141,7 @@ export async function deleteEntry(userId: string, id: string) {
   try {
     const { firestore } = initializeFirebase();
     const entryRef = doc(firestore, 'users', userId, 'journalEntries', id);
-    deleteDocumentNonBlocking(entryRef);
+    await deleteDoc(entryRef);
   } catch(error: any) {
       console.error("Error deleting document: ", error);
       throw new Error('Error al eliminar de la base de datos.');

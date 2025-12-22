@@ -46,57 +46,37 @@ service cloud.firestore {
     }
 
     /**
-     * Checks if the currently authenticated user is the owner of an *existing* document.
-     * CRITICAL: This must be used for all update and delete operations to prevent
-     * acting on non-existent documents.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Rules for the user's root document, typically storing profile information.
-     * @path /users/{userId}
-     * @allow (create) An authenticated user creating their own user document: `create /users/user_abc`
-     * @deny (list) Any user attempting to list all user documents: `list /users`
-     * @principle Restricts access to a user's own data tree and prevents user enumeration.
+     * Rules for the user's root document. This path is primarily for structuring
+     * subcollections and may not hold a document itself.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if false; // Deleting user root documents is disallowed to prevent orphaning subcollections.
-    }
+      // Disallow direct reads/writes on the user's root path.
+      // This forces data to be stored in specific subcollections (e.g., journalEntries).
+      allow read, write: if false;
 
+      // Allow access to subcollections only if the user is the owner.
+      // This rule is inherited by all subcollections under /users/{userId}.
+      match /{allPaths=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
     /**
      * @description Rules for a user's private journal entries.
      * @path /users/{userId}/journalEntries/{journalEntryId}
-     * @allow (create) An authenticated user creating a journal entry in their own space: `create /users/user_abc/journalEntries/entry_123`
-     * @deny (get) An authenticated user trying to read another user's entry: `get /users/user_xyz/journalEntries/entry_456`
      * @principle Enforces strict document ownership for all read and write operations.
      */
     match /users/{userId}/journalEntries/{journalEntryId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+        allow read, create, update, delete: if isOwner(userId);
     }
-
+    
     /**
      * @description Rules for a user's private tags for organizing journal entries.
      * @path /users/{userId}/tags/{tagId}
-     * @allow (list) An authenticated user listing their own tags: `list /users/user_abc/tags`
-     * @deny (update) An authenticated user trying to update another user's tag: `update /users/user_xyz/tags/tag_789`
      * @principle Enforces strict document ownership for all read and write operations.
      */
     match /users/{userId}/tags/{tagId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+        allow read, create, update, delete: if isOwner(userId);
     }
   }
 }

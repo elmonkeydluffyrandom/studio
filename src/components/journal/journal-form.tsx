@@ -22,6 +22,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
 import { useUser } from '@/firebase';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const FormSchema = z.object({
   bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
@@ -95,10 +97,26 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
         });
         // Redirect is handled by the server action
       } catch (error: any) {
+        // As requested: log the full error to the browser console for debugging.
+        console.error("Error saving entry:", error);
+
+        // Also, emit a contextual permission error if applicable
+        // This is a generic way to do it from the client
+        if (error.message.includes('permission-denied') || error.code?.includes('permission-denied')) {
+            const path = isEditing ? `users/${user.uid}/journalEntries/${entry.id}` : `users/${user.uid}/journalEntries`;
+            const operation = isEditing ? 'update' : 'create';
+            const permissionError = new FirestorePermissionError({
+                path: path,
+                operation: operation,
+                requestResourceData: data,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        }
+
         toast({
           variant: 'destructive',
           title: 'Error al guardar',
-          description: error.message || 'No se pudo guardar la entrada.',
+          description: error.message || 'No se pudo guardar la entrada. Revisa la consola para más detalles.',
         });
       }
     });
