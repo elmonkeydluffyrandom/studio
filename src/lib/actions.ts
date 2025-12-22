@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { doc, collection } from 'firebase/firestore';
+import { doc, collection, Timestamp, getDoc } from 'firebase/firestore';
 import { initializeFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 
 
@@ -62,21 +62,27 @@ export async function addEntry(prevState: State, formData: FormData) {
     teaching,
     practicalApplication,
     tagIds: tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
-    createdAt: new Date().toISOString(),
+    createdAt: Timestamp.now(),
   };
 
-  
+  let newEntryId: string | undefined;
   try {
     const { firestore } = initializeFirebase();
     const entriesCollection = collection(firestore, 'users', userId, 'journalEntries');
-    addDocumentNonBlocking(entriesCollection, newEntry);
+    const docRef = await addDocumentNonBlocking(entriesCollection, newEntry);
+    newEntryId = docRef?.id;
   } catch(error: any) {
       console.error("Error adding document: ", error);
       return { message: 'Error al guardar en la base de datos.' };
   }
   
-  revalidatePath('/');
-  redirect(`/`);
+  if (newEntryId) {
+    revalidatePath('/');
+    redirect(`/entry/${newEntryId}`);
+  } else {
+    revalidatePath('/');
+    redirect('/');
+  }
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
@@ -109,7 +115,7 @@ export async function updateEntry(prevState: State, formData: FormData) {
     updateDocumentNonBlocking(entryRef, {
       ...data,
       tagIds: data.tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
-      updatedAt: new Date().toISOString()
+      updatedAt: Timestamp.now()
     });
   } catch (error: any) {
       console.error("Error updating document: ", error);
