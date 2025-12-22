@@ -46,7 +46,10 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
           description: 'Tu entrada ha sido eliminada exitosamente.',
         });
         setOpen(false);
-        router.push('/');
+        // If on the detail page, redirect to home. Otherwise, just refresh.
+        if (router.asPath === `/entry/${entryId}`) {
+            router.push('/');
+        }
         router.refresh(); // To re-fetch data on the dashboard
       } catch (error: any) {
         console.error("Error deleting entry:", error);
