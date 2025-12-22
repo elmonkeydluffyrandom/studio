@@ -6,11 +6,11 @@ import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
 import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { DeleteEntryDialog } from '@/components/journal/delete-entry-dialog';
-import PrintButton from '@/components/journal/print-button';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { JournalEntry } from '@/lib/types';
 import Login from '@/components/auth/login';
+import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
 
 export default function EntryDetailPage() {
   const { id } = useParams();
@@ -33,7 +33,6 @@ export default function EntryDetailPage() {
     return <Login />;
   }
 
-  // After loading, if the entry is not found, show a specific message.
   if (!entry && !isEntryLoading) {
     return (
         <div className="container mx-auto max-w-4xl text-center p-8">
@@ -48,7 +47,6 @@ export default function EntryDetailPage() {
     );
   }
 
-  // This check is necessary for TypeScript to be sure 'entry' is not null.
   if (!entry) {
     return null; 
   }
@@ -86,7 +84,6 @@ export default function EntryDetailPage() {
         </div>
       </header>
 
-      {/* Content for both screen and print */}
       <div className="space-y-8">
         <div className="print-section">
           <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura (Scripture)</h2>
@@ -129,7 +126,7 @@ export default function EntryDetailPage() {
           </div>
         )}
       </div>
-      <PrintButton />
+      <DownloadPdfButton entry={entry} />
     </div>
   );
 }
