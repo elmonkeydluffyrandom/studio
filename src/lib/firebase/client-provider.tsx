@@ -13,7 +13,8 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
   const firebaseServices = useMemo(() => {
     // Initialize Firebase on the client side, once per component mount.
     if (!firebaseConfig?.projectId) {
-      console.error("Firebase config not loaded");
+      // This should now be caught by the explicit check in config.ts, but leaving as a safeguard.
+      console.error("Firebase config is not available on the client. Check your NEXT_PUBLIC_FIREBASE_CONFIG environment variable.");
       return null;
     }
     return initializeFirebase();
@@ -21,7 +22,7 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
 
   if (!firebaseServices) {
     // You can render a loading state or null here
-    return <div className="container mx-auto max-w-4xl text-center p-8">Cargando configuración...</div>;
+    return <div className="container mx-auto max-w-4xl text-center p-8">Cargando configuración de Firebase...</div>;
   }
 
   return (

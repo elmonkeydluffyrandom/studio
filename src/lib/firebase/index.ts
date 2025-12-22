@@ -3,14 +3,10 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
-// This function is NOT 'use client' and can be used on the server.
+// This function can be used on both server and client.
 export function initializeFirebase() {
-    if (!firebaseConfig) {
-        throw new Error("Firebase config not found. Make sure it is set up in src/firebase/config.ts");
-    }
-
-    if (!firebaseConfig.projectId) {
-        throw new Error('"projectId" not provided in firebase.initializeApp.');
+    if (!firebaseConfig?.projectId) {
+        throw new Error('"projectId" not provided in firebase.initializeApp. Check your NEXT_PUBLIC_FIREBASE_CONFIG environment variable.');
     }
 
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
