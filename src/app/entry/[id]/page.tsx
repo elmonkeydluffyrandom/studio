@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
-import { ArrowLeft, Edit, Printer, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { DeleteEntryDialog } from '@/components/journal/delete-entry-dialog';
+import PrintButton from '@/components/journal/print-button';
 
 export default async function EntryDetailPage({ params }: { params: { id: string } }) {
   const entry = await getEntry(params.id);
@@ -13,21 +14,6 @@ export default async function EntryDetailPage({ params }: { params: { id: string
   if (!entry) {
     notFound();
   }
-
-  const PrintButton = () => {
-    'use client';
-    return (
-        <Button
-          onClick={() => window.print()}
-          variant="outline"
-          size="icon"
-          className="no-print fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg border-2 z-50 bg-background/80 backdrop-blur-sm"
-          aria-label="Imprimir entrada"
-        >
-          <Printer className="h-6 w-6" />
-        </Button>
-    );
-  };
 
   return (
     <div className="container mx-auto max-w-4xl print-container">
