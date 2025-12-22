@@ -80,6 +80,8 @@ export async function addEntry(prevState: State, formData: FormData) {
     revalidatePath('/');
     redirect(`/entry/${newEntryId}`);
   } else {
+    // If for some reason we don't get an ID back, just go to the dashboard
+    // This might happen with non-blocking updates where the UI updates optimistically
     revalidatePath('/');
     redirect('/');
   }
