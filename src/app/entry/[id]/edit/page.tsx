@@ -2,7 +2,7 @@
 import JournalForm from '@/components/journal/journal-form';
 import { updateEntry } from '@/lib/actions';
 import { notFound, useParams } from 'next/navigation';
-import { useDoc, useMemoFirebase, useUser, useFirestore } from '@/lib/firebase/client';
+import { useDoc, useMemoFirebase, useUser, useFirestore } from '@/firebase';
 import type { JournalEntry } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 import Login from '@/components/auth/login';
@@ -14,7 +14,7 @@ export default function EditEntryPage() {
   const firestore = useFirestore();
 
   const entryRef = useMemoFirebase(
-    () => (user && firestore && entryId ? doc(firestore, 'users', user.uid, 'entries', entryId) : null),
+    () => (user && firestore && entryId ? doc(firestore, 'users', user.uid, 'journalEntries', entryId) : null),
     [user, firestore, entryId]
   );
   const { data: entry, isLoading: isEntryLoading } = useDoc<JournalEntry>(entryRef);

@@ -17,7 +17,7 @@ import { Loader2 } from 'lucide-react';
 import { deleteEntry } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@/lib/firebase/client';
+import { useUser } from '@/firebase';
 
 export function DeleteEntryDialog({ entryId, children }: { entryId: string, children: React.ReactNode }) {
   const [open, setOpen] = useState(false);

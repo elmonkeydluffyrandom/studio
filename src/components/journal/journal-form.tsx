@@ -24,16 +24,16 @@ import type { JournalEntry } from '@/lib/types';
 import { useDebounce } from '@/lib/hooks/use-debounce';
 import { runFlow } from '@genkit-ai/next/client';
 import { verseAutocompletion } from '@/ai/flows/verse-autocompletion';
-import { useUser } from '@/lib/firebase/client';
+import { useUser } from '@/firebase';
 import { addEntry, updateEntry } from '@/lib/actions';
 
 const FormSchema = z.object({
-  bibleReference: z.string().min(3, 'La cita bíblica es requerida.'),
+  bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
   verseText: z.string().min(10, 'El texto del versículo es requerido.'),
   observation: z.string().min(10, 'La observación es requerida.'),
   teaching: z.string().min(10, 'La enseñanza es requerida.'),
-  application: z.string().min(10, 'La aplicación práctica es requerida.'),
-  tags: z.string().optional(),
+  practicalApplication: z.string().min(10, 'La aplicación práctica es requerida.'),
+  tagIds: z.string().optional(),
 });
 
 type JournalFormValues = z.infer<typeof FormSchema>;
@@ -53,21 +53,21 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
   const form = useForm<JournalFormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      bibleReference: entry?.bibleReference || '',
+      bibleVerse: entry?.bibleVerse || '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
-      application: entry?.application || '',
-      tags: entry?.tags?.join(', ') || '',
+      practicalApplication: entry?.practicalApplication || '',
+      tagIds: entry?.tagIds?.join(', ') || '',
     },
   });
 
   const [isAutocompleting, setIsAutocompleting] = useState(false);
-  const verseRefToAutocomplete = useDebounce(form.watch('bibleReference'), 1000);
+  const verseRefToAutocomplete = useDebounce(form.watch('bibleVerse'), 1000);
 
   useEffect(() => {
     async function autocompleteVerse() {
-      if (verseRefToAutocomplete && verseRefToAutocomplete.length > 4 && verseRefToAutocomplete !== entry?.bibleReference) {
+      if (verseRefToAutocomplete && verseRefToAutocomplete.length > 4 && verseRefToAutocomplete !== entry?.bibleVerse) {
         setIsAutocompleting(true);
         try {
           const result = await runFlow(verseAutocompletion, { verseReference: verseRefToAutocomplete });
@@ -87,7 +87,7 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
       }
     }
     autocompleteVerse();
-  }, [verseRefToAutocomplete, form, entry?.bibleReference, toast]);
+  }, [verseRefToAutocomplete, form, entry?.bibleVerse, toast]);
 
   const onSubmit = (data: JournalFormValues) => {
     if (!user) {
@@ -106,12 +106,12 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
         if (isEditing && entry?.id) {
             formData.append('id', entry.id);
         }
-        formData.append('bibleReference', data.bibleReference);
+        formData.append('bibleVerse', data.bibleVerse);
         formData.append('verseText', data.verseText);
         formData.append('observation', data.observation);
         formData.append('teaching', data.teaching);
-        formData.append('application', data.application);
-        formData.append('tags', data.tags || '');
+        formData.append('practicalApplication', data.practicalApplication);
+        formData.append('tagIds', data.tagIds || '');
 
         
         const result = await action(null, formData);
@@ -148,7 +148,7 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <FormField
               control={form.control}
-              name="bibleReference"
+              name="bibleVerse"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Cita Bíblica (S - Scripture)</FormLabel>
@@ -221,7 +221,7 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
             
             <FormField
               control={form.control}
-              name="application"
+              name="practicalApplication"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Aplicación Práctica (P - Prayer / Part 2)</FormLabel>
@@ -239,7 +239,7 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
             
             <FormField
               control={form.control}
-              name="tags"
+              name="tagIds"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Etiquetas</FormLabel>

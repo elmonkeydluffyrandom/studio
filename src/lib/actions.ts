@@ -3,21 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { doc, addDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { initializeFirebase } from '@/lib/firebase';
-import { setDoc } from 'firebase/firestore';
-import { errorEmitter } from '@/lib/firebase/error-emitter';
-import { FirestorePermissionError } from '@/lib/firebase/errors';
+import { doc, collection, serverTimestamp } from 'firebase/firestore';
+import { initializeFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 
 
 const FormSchema = z.object({
   id: z.string(),
-  bibleReference: z.string().min(3, 'La cita bíblica es requerida.'),
+  bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
   verseText: z.string().min(10, 'El texto del versículo es requerido.'),
   observation: z.string().min(10, 'La observación es requerida.'),
   teaching: z.string().min(10, 'La enseñanza es requerida.'),
-  application: z.string().min(10, 'La aplicación práctica es requerida.'),
-  tags: z.string(),
+  practicalApplication: z.string().min(10, 'La aplicación práctica es requerida.'),
+  tagIds: z.string(),
 });
 
 const CreateEntry = FormSchema.omit({ id: true });
@@ -25,24 +22,24 @@ const UpdateEntry = FormSchema;
 
 export type State = {
   errors?: {
-    bibleReference?: string[];
+    bibleVerse?: string[];
     verseText?: string[];
     observation?: string[];
     teaching?: string[];
-    application?: string[];
-    tags?: string[];
+    practicalApplication?: string[];
+    tagIds?: string[];
   };
   message?: string | null;
 };
 
 export async function addEntry(prevState: State, formData: FormData) {
   const validatedFields = CreateEntry.safeParse({
-    bibleReference: formData.get('bibleReference'),
+    bibleVerse: formData.get('bibleVerse'),
     verseText: formData.get('verseText'),
     observation: formData.get('observation'),
     teaching: formData.get('teaching'),
-    application: formData.get('application'),
-    tags: formData.get('tags'),
+    practicalApplication: formData.get('practicalApplication'),
+    tagIds: formData.get('tagIds'),
   });
 
   if (!validatedFields.success) {
@@ -52,37 +49,33 @@ export async function addEntry(prevState: State, formData: FormData) {
     };
   }
 
-  const { bibleReference, verseText, observation, teaching, application, tags } = validatedFields.data;
+  const { bibleVerse, verseText, observation, teaching, practicalApplication, tagIds } = validatedFields.data;
   const userId = formData.get('userId') as string;
   if (!userId) {
       return { message: "Usuario no autenticado en el servidor."};
   }
   
   const newEntry = {
-    bibleReference,
+    bibleVerse,
     verseText,
     observation,
     teaching,
-    application,
-    tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+    practicalApplication,
+    tagIds: tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
     createdAt: serverTimestamp(),
   };
 
   
   try {
     const { firestore } = initializeFirebase();
-    const entriesCollection = collection(firestore, 'users', userId, 'entries');
-    const docRef = await addDoc(entriesCollection, newEntry);
+    const entriesCollection = collection(firestore, 'users', userId, 'journalEntries');
+    const docRef = await addDocumentNonBlocking(entriesCollection, newEntry);
     revalidatePath('/');
     redirect(`/entry/${docRef.id}`);
 
   } catch(error: any) {
-     if (error instanceof FirestorePermissionError) {
-      errorEmitter.emit('permission-error', error);
-    } else {
       console.error("Error adding document: ", error);
       return { message: 'Error al guardar en la base de datos.' };
-    }
   }
   
 }
@@ -90,12 +83,12 @@ export async function addEntry(prevState: State, formData: FormData) {
 export async function updateEntry(prevState: State, formData: FormData) {
   const validatedFields = UpdateEntry.safeParse({
     id: formData.get('id'),
-    bibleReference: formData.get('bibleReference'),
+    bibleVerse: formData.get('bibleVerse'),
     verseText: formData.get('verseText'),
     observation: formData.get('observation'),
     teaching: formData.get('teaching'),
-    application: formData.get('application'),
-    tags: formData.get('tags'),
+    practicalApplication: formData.get('practicalApplication'),
+    tagIds: formData.get('tagIds'),
   });
 
   if (!validatedFields.success) {
@@ -113,18 +106,14 @@ export async function updateEntry(prevState: State, formData: FormData) {
   
   try {
     const { firestore } = initializeFirebase();
-    const entryRef = doc(firestore, 'users', userId, 'entries', id);
-    await updateDoc(entryRef, {
+    const entryRef = doc(firestore, 'users', userId, 'journalEntries', id);
+    updateDocumentNonBlocking(entryRef, {
       ...data,
-      tags: data.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+      tagIds: data.tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
     });
   } catch (error: any) {
-    if (error instanceof FirestorePermissionError) {
-      errorEmitter.emit('permission-error', error);
-    } else {
       console.error("Error updating document: ", error);
       return { message: 'Error al actualizar en la base de datos.' };
-    }
   }
 
   revalidatePath('/');
@@ -144,15 +133,11 @@ export async function deleteEntry(userId: string, id: string) {
 
   try {
     const { firestore } = initializeFirebase();
-    const entryRef = doc(firestore, 'users', userId, 'entries', id);
-    await deleteDoc(entryRef);
+    const entryRef = doc(firestore, 'users', userId, 'journalEntries', id);
+    deleteDocumentNonBlocking(entryRef);
   } catch(error: any) {
-     if (error instanceof FirestorePermissionError) {
-      errorEmitter.emit('permission-error', error);
-    } else {
       console.error("Error deleting document: ", error);
       throw new Error('Error al eliminar de la base de datos.');
-    }
   }
 
   revalidatePath('/');

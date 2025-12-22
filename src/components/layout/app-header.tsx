@@ -3,7 +3,7 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { BookMarked } from 'lucide-react';
-import { useUser } from '@/lib/firebase/client';
+import { useUser } from '@/firebase';
 
 export default function AppHeader() {
   const { user } = useUser();

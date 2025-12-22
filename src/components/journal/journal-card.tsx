@@ -35,7 +35,7 @@ export default function JournalCard({ entry }: JournalCardProps) {
               />
           )}
            <div className="absolute inset-0 p-6 flex flex-col justify-end bg-gradient-to-t from-card to-transparent">
-             <CardTitle className="font-headline text-xl">{entry.bibleReference}</CardTitle>
+             <CardTitle className="font-headline text-xl">{entry.bibleVerse}</CardTitle>
              <CardDescription>{formatDate(entry.createdAt)}</CardDescription>
            </div>
         </CardHeader>
@@ -46,7 +46,7 @@ export default function JournalCard({ entry }: JournalCardProps) {
         </CardContent>
         <CardFooter>
           <div className="flex flex-wrap gap-2">
-            {entry.tags && entry.tags.slice(0, 3).map(tag => (
+            {entry.tagIds && entry.tagIds.slice(0, 3).map(tag => (
               <Badge key={tag} variant="secondary">
                 {tag}
               </Badge>

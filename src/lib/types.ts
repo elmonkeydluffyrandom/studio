@@ -2,11 +2,11 @@ import { Timestamp } from "firebase/firestore";
 
 export interface JournalEntry {
   id: string;
-  bibleReference: string;
+  bibleVerse: string;
   verseText: string;
   observation: string;
   teaching: string;
-  application: string;
-  tags: string[];
+  practicalApplication: string;
+  tagIds: string[];
   createdAt: Timestamp | Date; 
 }

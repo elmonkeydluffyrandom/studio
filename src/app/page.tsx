@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import JournalList from '@/components/journal/journal-list';
 import type { JournalEntry } from '@/lib/types';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/lib/firebase/client';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import Login from '@/components/auth/login';
 import { collection, query, orderBy } from 'firebase/firestore';
 
@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const firestore = useFirestore();
 
   const entriesRef = useMemoFirebase(
-    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'entries'), orderBy('createdAt', 'desc')) : null,
+    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries'), orderBy('createdAt', 'desc')) : null,
     [user, firestore]
   );
 
@@ -34,11 +34,11 @@ export default function DashboardPage() {
       return entries;
     }
     return entries.filter(entry =>
-      entry.bibleReference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.bibleVerse.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.observation.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.teaching.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.application.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (entry.tags && entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
+      entry.practicalApplication.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (entry.tagIds && entry.tagIds.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
     );
   }, [entries, searchTerm]);
   

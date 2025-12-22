@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/utils';
 import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { DeleteEntryDialog } from '@/components/journal/delete-entry-dialog';
 import PrintButton from '@/components/journal/print-button';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase/client';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { JournalEntry } from '@/lib/types';
 import Login from '@/components/auth/login';
@@ -19,7 +19,7 @@ export default function EntryDetailPage() {
   const firestore = useFirestore();
 
   const entryRef = useMemoFirebase(
-    () => (user && firestore && entryId ? doc(firestore, 'users', user.uid, 'entries', entryId) : null),
+    () => (user && firestore && entryId ? doc(firestore, 'users', user.uid, 'journalEntries', entryId) : null),
     [user, firestore, entryId]
   );
 
@@ -62,7 +62,7 @@ export default function EntryDetailPage() {
         </Button>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
           <div>
-            <h1 className="text-4xl font-headline font-bold text-foreground print-title">{entry?.bibleReference}</h1>
+            <h1 className="text-4xl font-headline font-bold text-foreground print-title">{entry?.bibleVerse}</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {entry?.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
             </p>
@@ -110,15 +110,15 @@ export default function EntryDetailPage() {
         <div className="print-section">
           <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación Práctica (Prayer)</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-            {entry?.application}
+            {entry?.practicalApplication}
           </p>
         </div>
 
-        {entry?.tags && entry.tags.length > 0 && (
+        {entry?.tagIds && entry.tagIds.length > 0 && (
           <div className="print-section print-tags">
             <h3 className="text-lg font-headline font-semibold print-section-title">Etiquetas</h3>
             <div className="mt-2 flex flex-wrap gap-2">
-              {entry.tags.map(tag => (
+              {entry.tagIds.map(tag => (
                 <Badge key={tag} variant="secondary" className="print-tag">
                   {tag}
                 </Badge>
