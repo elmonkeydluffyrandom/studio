@@ -2,9 +2,8 @@
 import JournalForm from '@/components/journal/journal-form';
 import { updateEntry } from '@/lib/actions';
 import { notFound, useParams } from 'next/navigation';
-import { useDoc, useMemoFirebase } from '@/firebase';
+import { useDoc, useMemoFirebase, useUser, useFirestore } from '@/lib/firebase/client';
 import type { JournalEntry } from '@/lib/types';
-import { useUser, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import Login from '@/components/auth/login';
 

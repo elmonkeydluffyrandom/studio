@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/utils';
 import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { DeleteEntryDialog } from '@/components/journal/delete-entry-dialog';
 import PrintButton from '@/components/journal/print-button';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/lib/firebase/client';
 import { doc } from 'firebase/firestore';
 import type { JournalEntry } from '@/lib/types';
 import Login from '@/components/auth/login';

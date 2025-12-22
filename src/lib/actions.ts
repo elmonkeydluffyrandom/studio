@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { doc, addDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase/index';
+import { initializeFirebase } from '@/lib/firebase';
+import { getAuth } from 'firebase/auth';
 
 const FormSchema = z.object({
   id: z.string(),
@@ -32,7 +33,8 @@ export type State = {
 };
 
 export async function addEntry(prevState: State, formData: FormData) {
-  const { firestore, auth } = initializeFirebase();
+  const { firestore } = initializeFirebase();
+  const auth = getAuth();
   const user = auth.currentUser;
   
   if (!user) {
@@ -79,7 +81,8 @@ export async function addEntry(prevState: State, formData: FormData) {
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
-  const { firestore, auth } = initializeFirebase();
+  const { firestore } = initializeFirebase();
+  const auth = getAuth();
   const user = auth.currentUser;
 
   if (!user) {
@@ -123,7 +126,8 @@ export async function updateEntry(prevState: State, formData: FormData) {
 }
 
 export async function deleteEntry(id: string) {
-  const { firestore, auth } = initializeFirebase();
+  const { firestore } = initializeFirebase();
+  const auth = getAuth();
   const user = auth.currentUser;
 
   if (!user) {

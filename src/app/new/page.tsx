@@ -1,7 +1,7 @@
 'use client';
 import JournalForm from '@/components/journal/journal-form';
 import { addEntry } from '@/lib/actions';
-import { useUser } from '@/firebase';
+import { useUser } from '@/lib/firebase/client';
 import Login from '@/components/auth/login';
 
 export default function NewEntryPage() {

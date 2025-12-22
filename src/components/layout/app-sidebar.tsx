@@ -11,7 +11,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, PlusCircle, BookMarked, LogOut } from 'lucide-react';
-import { useUser, useAuth } from '@/firebase';
+import { useUser, useAuth } from '@/lib/firebase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { signOut } from 'firebase/auth';
 import { Button } from '../ui/button';

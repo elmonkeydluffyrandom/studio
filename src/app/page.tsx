@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import JournalList from '@/components/journal/journal-list';
 import type { JournalEntry } from '@/lib/types';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/lib/firebase/client';
 import Login from '@/components/auth/login';
 import { collection, query, orderBy } from 'firebase/firestore';
 
