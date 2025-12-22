@@ -147,7 +147,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="bibleVerse"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Cita Bíblica (S - Scripture)</FormLabel>
+                  <FormLabel>Cita Bíblica</FormLabel>
                   <FormControl>
                     <Input placeholder="Ej: Salmos 23:1" {...field} />
                   </FormControl>
@@ -181,7 +181,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="observation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Observación (O - Observation)</FormLabel>
+                  <FormLabel>Observación</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
@@ -199,7 +199,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="teaching"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Enseñanza (A - Application / Part 1)</FormLabel>
+                  <FormLabel>Enseñanza</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="¿Qué significa este pasaje? ¿Qué principio o verdad teológica enseña sobre Dios, el hombre, o la salvación?"
@@ -217,7 +217,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="practicalApplication"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Aplicación Práctica (P - Prayer / Part 2)</FormLabel>
+                  <FormLabel>Aplicación Práctica</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"

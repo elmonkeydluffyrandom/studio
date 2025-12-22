@@ -86,28 +86,28 @@ export default function EntryDetailPage() {
 
       <div className="space-y-8">
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura (Scripture)</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura</h2>
           <blockquote className="mt-2 border-l-4 border-primary pl-4 italic text-foreground/80 print-text">
             {entry.verseText}
           </blockquote>
         </div>
 
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Observación (Observation)</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Observación</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
             {entry.observation}
           </p>
         </div>
         
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Enseñanza (Application)</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Enseñanza</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
             {entry.teaching}
           </p>
         </div>
 
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación Práctica (Prayer)</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación Práctica</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
             {entry.practicalApplication}
           </p>
