@@ -62,14 +62,13 @@ export async function addEntry(prevState: State, formData: FormData) {
     teaching,
     practicalApplication,
     tagIds: tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
-    createdAt: new Date(), // Use client-side date
+    createdAt: new Date().toISOString(),
   };
 
   
   try {
     const { firestore } = initializeFirebase();
     const entriesCollection = collection(firestore, 'users', userId, 'journalEntries');
-    // We are not awaiting the result here for non-blocking UI
     addDocumentNonBlocking(entriesCollection, newEntry);
   } catch(error: any) {
       console.error("Error adding document: ", error);
@@ -110,6 +109,7 @@ export async function updateEntry(prevState: State, formData: FormData) {
     updateDocumentNonBlocking(entryRef, {
       ...data,
       tagIds: data.tagIds.split(',').map(tag => tag.trim()).filter(tag => tag),
+      updatedAt: new Date().toISOString()
     });
   } catch (error: any) {
       console.error("Error updating document: ", error);

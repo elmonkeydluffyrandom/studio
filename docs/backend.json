@@ -38,9 +38,8 @@
           }
         },
         "createdAt": {
-          "type": "string",
-          "description": "Timestamp of when the entry was created.",
-          "format": "date-time"
+          "type": "object",
+          "description": "Timestamp of when the entry was created."
         }
       },
       "required": [
