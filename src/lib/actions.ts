@@ -32,10 +32,17 @@ export type State = {
   message?: string | null;
 };
 
+// This function needs to initialize firebase on the server.
+function getAuthenticatedUser() {
+    // We are on the server, so we can't use the useUser hook.
+    // We need to initialize firebase and get the auth instance.
+    const { auth } = initializeFirebase();
+    return auth.currentUser;
+}
+
+
 export async function addEntry(prevState: State, formData: FormData) {
-  const { firestore } = initializeFirebase();
-  const auth = getAuth();
-  const user = auth.currentUser;
+  const user = getAuthenticatedUser();
   
   if (!user) {
     return { message: "Usuario no autenticado."};
@@ -70,6 +77,7 @@ export async function addEntry(prevState: State, formData: FormData) {
   };
 
   try {
+    const { firestore } = initializeFirebase();
     const entriesCollection = collection(firestore, 'users', user.uid, 'entries');
     const docRef = await addDoc(entriesCollection, newEntry);
     revalidatePath('/');
@@ -81,9 +89,7 @@ export async function addEntry(prevState: State, formData: FormData) {
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
-  const { firestore } = initializeFirebase();
-  const auth = getAuth();
-  const user = auth.currentUser;
+  const user = getAuthenticatedUser();
 
   if (!user) {
     return { message: "Usuario no autenticado."};
@@ -109,6 +115,7 @@ export async function updateEntry(prevState: State, formData: FormData) {
   const { id, ...data } = validatedFields.data;
   
   try {
+    const { firestore } = initializeFirebase();
     const entryRef = doc(firestore, 'users', user.uid, 'entries', id);
     await updateDoc(entryRef, {
       ...data,
@@ -126,9 +133,7 @@ export async function updateEntry(prevState: State, formData: FormData) {
 }
 
 export async function deleteEntry(id: string) {
-  const { firestore } = initializeFirebase();
-  const auth = getAuth();
-  const user = auth.currentUser;
+  const user = getAuthenticatedUser();
 
   if (!user) {
     throw new Error("Usuario no autenticado.");
@@ -139,6 +144,7 @@ export async function deleteEntry(id: string) {
   }
 
   try {
+    const { firestore } = initializeFirebase();
     const entryRef = doc(firestore, 'users', user.uid, 'entries', id);
     await deleteDoc(entryRef);
   } catch(error) {
