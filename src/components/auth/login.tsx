@@ -38,7 +38,7 @@ export default function Login() {
       let description = 'Ocurrió un error inesperado.';
       if (error.code === 'auth/email-already-in-use') {
         description = 'Este correo electrónico ya está en uso. Intenta iniciar sesión.';
-      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
         description = 'Correo electrónico o contraseña incorrectos.';
       } else if (error.code === 'auth/weak-password') {
         description = 'La contraseña debe tener al menos 6 caracteres.';
