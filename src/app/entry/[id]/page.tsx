@@ -10,7 +10,7 @@ import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { JournalEntry } from '@/lib/types';
 import Login from '@/components/auth/login';
-import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
+import PrintButton from '@/components/journal/print-button';
 
 export default function EntryDetailPage() {
   const { id } = useParams();
@@ -126,7 +126,7 @@ export default function EntryDetailPage() {
           </div>
         )}
       </div>
-      <DownloadPdfButton entry={entry} />
+      <PrintButton />
     </div>
   );
 }
