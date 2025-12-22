@@ -150,10 +150,10 @@ export default function EntryDetailPage() {
                     value={formData.bibleVerse}
                     onChange={handleInputChange}
                     placeholder="Ej: Salmos 23:1"
-                    className="text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0"
+                    className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0"
                  />
             ) : (
-                <h1 className="text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
+                <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
 
             )}
             <p className="text-sm text-muted-foreground mt-1">
@@ -165,7 +165,7 @@ export default function EntryDetailPage() {
                 <>
                     <Button onClick={handleUpdate} variant="default" className="bg-green-600 hover:bg-green-700">
                         <Save className="mr-2 h-4 w-4" />
-                        Guardar Cambios
+                        Guardar
                     </Button>
                     <Button onClick={handleCancel} variant="outline">
                         <X className="mr-2 h-4 w-4" />
