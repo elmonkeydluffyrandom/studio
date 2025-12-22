@@ -1,40 +1,57 @@
 'use client';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth, initiateAnonymousSignIn } from '@/firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { Separator } from '../ui/separator';
-
-function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
-    return (
-      <svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M22.56 12.25C22.56 11.45 22.49 10.68 22.36 9.92H12V14.49H18.02C17.73 16.03 16.87 17.34 15.53 18.23V20.89H19.5C21.57 19.04 22.56 16.29 22.56 12.25Z" fill="#4285F4"/>
-        <path d="M12 23C14.97 23 17.47 22.04 19.5 20.89L15.53 18.23C14.51 18.91 13.33 19.33 12 19.33C9.31 19.33 7.06 17.66 6.2 15.29H2.1V17.95C4.12 21.05 7.79 23 12 23Z" fill="#34A853"/>
-        <path d="M6.2 15.29C5.96 14.58 5.83 13.81 5.83 13C5.83 12.19 5.96 11.42 6.2 10.71V8.05H2.1C1.22 9.77 0.67 11.75 0.67 14C0.67 16.25 1.22 18.23 2.1 19.95L6.2 15.29Z" fill="#FBBC05"/>
-        <path d="M12 5.67C13.48 5.67 14.67 6.22 15.66 7.15L19.58 3.32C17.47 1.25 14.97 0 12 0C7.79 0 4.12 1.95 2.1 5.05L6.2 8.05C7.06 5.34 9.31 3.67 12 3.67Z" fill="#EA4335"/>
-      </svg>
-    );
-  }
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useAuth } from '@/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
   const auth = useAuth();
+  const { toast } = useToast();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleGoogleSignIn = async () => {
-    if (auth) {
-      const provider = new GoogleAuthProvider();
-      try {
-        await signInWithPopup(auth, provider);
-      } catch (error) {
-        console.error("Error during Google sign-in:", error);
+  const handleAuthAction = async (action: 'signUp' | 'signIn') => {
+    if (!auth) return;
+    setIsSubmitting(true);
+
+    try {
+      if (action === 'signUp') {
+        await createUserWithEmailAndPassword(auth, email, password);
+        toast({
+          title: 'Cuenta Creada',
+          description: '¡Bienvenido! Has iniciado sesión.',
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast({
+          title: 'Inicio de Sesión Exitoso',
+          description: '¡Bienvenido de nuevo!',
+        });
       }
+    } catch (error: any) {
+      console.error(`Error during ${action}:`, error);
+      let description = 'Ocurrió un error inesperado.';
+      if (error.code === 'auth/email-already-in-use') {
+        description = 'Este correo electrónico ya está en uso. Intenta iniciar sesión.';
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        description = 'Correo electrónico o contraseña incorrectos.';
+      } else if (error.code === 'auth/weak-password') {
+        description = 'La contraseña debe tener al menos 6 caracteres.';
+      }
+      toast({
+        variant: 'destructive',
+        title: 'Error de autenticación',
+        description,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  const handleAnonymousSignIn = () => {
-    if (auth) {
-        initiateAnonymousSignIn(auth);
-    }
-  }
 
   return (
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center">
@@ -42,25 +59,39 @@ export default function Login() {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-headline">Bienvenido a BibliaDiario</CardTitle>
           <CardDescription>
-            Inicia sesión para guardar y administrar tus reflexiones bíblicas.
+            Inicia sesión o crea una cuenta para guardar tus reflexiones.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Button onClick={handleGoogleSignIn} className="w-full">
-            <GoogleIcon className="mr-2 h-5 w-5" />
-            <span>Iniciar sesión con Google</span>
-          </Button>
-          <div className="relative">
-            <Separator />
-            <div className="absolute inset-0 flex items-center">
-                <span className="w-full text-center">
-                    <span className="bg-background px-2 text-xs uppercase text-muted-foreground">O</span>
-                </span>
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="email">Correo Electrónico</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="tu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isSubmitting}
+            />
           </div>
-          <Button onClick={handleAnonymousSignIn} variant="secondary" className="w-full">
-            <span>Continuar como invitado</span>
-          </Button>
+          <div className="grid gap-2">
+            <Label htmlFor="password">Contraseña</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isSubmitting}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Button onClick={() => handleAuthAction('signIn')} disabled={isSubmitting || !email || !password}>
+              Iniciar Sesión
+            </Button>
+            <Button onClick={() => handleAuthAction('signUp')} variant="secondary" disabled={isSubmitting || !email || !password}>
+              Crear Cuenta
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
