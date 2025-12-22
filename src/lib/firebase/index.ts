@@ -1,22 +1,12 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-
+import { firebaseConfig } from '@/firebase/config';
 
 // This function is NOT 'use client' and can be used on the server.
 export function initializeFirebase() {
-    const firebaseConfigStr = process.env.NEXT_PUBLIC_FIREBASE_CONFIG;
-    
-    if (!firebaseConfigStr) {
-        throw new Error("Firebase config not found in environment variables. Make sure NEXT_PUBLIC_FIREBASE_CONFIG is set.");
-    }
-    
-    let firebaseConfig;
-    try {
-        firebaseConfig = JSON.parse(firebaseConfigStr);
-    } catch (e) {
-        console.error("Failed to parse firebaseConfig", e);
-        throw new Error("Invalid Firebase config in environment variables.");
+    if (!firebaseConfig) {
+        throw new Error("Firebase config not found. Make sure it is set up in src/firebase/config.ts");
     }
 
     if (!firebaseConfig.projectId) {
