@@ -25,7 +25,6 @@ import { useUser, useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { revalidatePath } from 'next/cache';
 
 const FormSchema = z.object({
   bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
