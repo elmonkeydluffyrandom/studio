@@ -1,6 +1,5 @@
 'use client';
 import JournalForm from '@/components/journal/journal-form';
-import { updateEntry } from '@/lib/actions';
 import { notFound, useParams } from 'next/navigation';
 import { useDoc, useMemoFirebase, useUser, useFirestore } from '@/firebase';
 import type { JournalEntry } from '@/lib/types';
@@ -33,7 +32,7 @@ export default function EditEntryPage() {
 
   return (
     <div className="container mx-auto max-w-4xl">
-      <JournalForm entry={entry as JournalEntry} action={updateEntry} />
+      <JournalForm entry={entry as JournalEntry} />
     </div>
   );
 }

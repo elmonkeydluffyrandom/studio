@@ -1,6 +1,5 @@
 'use client';
 import JournalForm from '@/components/journal/journal-form';
-import { addEntry } from '@/lib/actions';
 import { useUser } from '@/firebase';
 import Login from '@/components/auth/login';
 
@@ -16,7 +15,7 @@ export default function NewEntryPage() {
   }
   return (
     <div className="container mx-auto max-w-4xl">
-      <JournalForm action={addEntry} />
+      <JournalForm />
     </div>
   );
 }

@@ -21,9 +21,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { revalidatePath } from 'next/cache';
 
 const FormSchema = z.object({
   bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
@@ -38,14 +40,14 @@ type JournalFormValues = z.infer<typeof FormSchema>;
 
 interface JournalFormProps {
   entry?: JournalEntry;
-  action: (prevState: any, formData: FormData) => Promise<any>;
 }
 
-export default function JournalForm({ entry, action }: JournalFormProps) {
+export default function JournalForm({ entry }: JournalFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const { user } = useUser();
+  const firestore = useFirestore();
   const isEditing = !!entry;
 
   const form = useForm<JournalFormValues>({
@@ -61,10 +63,10 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
   });
 
   const onSubmit = (data: JournalFormValues) => {
-    if (!user) {
+    if (!user || !firestore) {
         toast({
             variant: 'destructive',
-            title: 'No autenticado',
+            title: 'Error de autenticación',
             description: 'Debes iniciar sesión para guardar una entrada.',
         });
         return;
@@ -72,37 +74,45 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
 
     startTransition(async () => {
       try {
-        const formData = new FormData();
-        formData.append('userId', user.uid); // Pass user ID to server action
-        if (isEditing && entry?.id) {
-            formData.append('id', entry.id);
-        }
-        formData.append('bibleVerse', data.bibleVerse);
-        formData.append('verseText', data.verseText);
-        formData.append('observation', data.observation);
-        formData.append('teaching', data.teaching);
-        formData.append('practicalApplication', data.practicalApplication);
-        formData.append('tagIds', data.tagIds || '');
-
+        const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
         
-        const result = await action(null, formData);
+        if (isEditing && entry?.id) {
+            // Update existing entry
+            const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
+            await setDoc(entryRef, {
+                ...data,
+                tagIds: tags,
+                updatedAt: Timestamp.now()
+            }, { merge: true });
+            
+            toast({
+              title: 'Entrada actualizada',
+              description: 'Tu entrada ha sido guardada exitosamente.',
+            });
+            router.push(`/entry/${entry.id}`);
 
-        if (result?.message) {
-            throw new Error(result.message);
+        } else {
+            // Create new entry
+            const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
+            const newEntry = {
+              ...data,
+              tagIds: tags,
+              createdAt: Timestamp.now(),
+            };
+            const docRef = await addDoc(entriesCollection, newEntry);
+            
+            toast({
+              title: 'Entrada creada',
+              description: 'Tu entrada ha sido guardada exitosamente.',
+            });
+            router.push(`/entry/${docRef.id}`);
         }
+        router.refresh();
 
-        toast({
-          title: isEditing ? 'Entrada actualizada' : 'Entrada creada',
-          description: 'Tu entrada ha sido guardada exitosamente.',
-        });
-        // Redirect is handled by the server action
       } catch (error: any) {
-        // As requested: log the full error to the browser console for debugging.
         console.error("Error saving entry:", error);
 
-        // Also, emit a contextual permission error if applicable
-        // This is a generic way to do it from the client
-        if (error.message.includes('permission-denied') || error.code?.includes('permission-denied')) {
+        if (error.code === 'permission-denied') {
             const path = isEditing ? `users/${user.uid}/journalEntries/${entry.id}` : `users/${user.uid}/journalEntries`;
             const operation = isEditing ? 'update' : 'create';
             const permissionError = new FirestorePermissionError({

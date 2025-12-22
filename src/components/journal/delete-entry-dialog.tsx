@@ -14,10 +14,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import { deleteEntry } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 
 export function DeleteEntryDialog({ entryId, children }: { entryId: string, children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -25,26 +25,31 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useUser();
+  const firestore = useFirestore();
 
   const handleDelete = () => {
-    if (!user) {
+    if (!user || !firestore) {
         toast({
             variant: 'destructive',
-            title: 'No autenticado',
+            title: 'No autenticado o Firestore no disponible',
             description: 'Debes iniciar sesión para eliminar una entrada.',
         });
         return;
     }
     startTransition(async () => {
       try {
-        await deleteEntry(user.uid, entryId);
+        const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entryId);
+        await deleteDoc(entryRef);
+        
         toast({
           title: 'Entrada eliminada',
           description: 'Tu entrada ha sido eliminada exitosamente.',
         });
         setOpen(false);
         router.push('/');
+        router.refresh(); // To re-fetch data on the dashboard
       } catch (error: any) {
+        console.error("Error deleting entry:", error);
         toast({
           variant: 'destructive',
           title: 'Error al eliminar',
