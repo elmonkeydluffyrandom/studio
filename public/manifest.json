@@ -3,9 +3,8 @@
   "short_name": "Diario",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f0f4f8",
-  "theme_color": "#a0c4ff",
-  "description": "Tu diario de estudio bíblico personal.",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
