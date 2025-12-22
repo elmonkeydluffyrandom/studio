@@ -24,6 +24,7 @@ import type { JournalEntry } from '@/lib/types';
 import { useDebounce } from '@/lib/hooks/use-debounce';
 import { runFlow } from '@genkit-ai/next/client';
 import { verseAutocompletion } from '@/ai/flows/verse-autocompletion';
+import { useUser } from '@/lib/firebase/client';
 import { addEntry, updateEntry } from '@/lib/actions';
 
 const FormSchema = z.object({
@@ -39,22 +40,14 @@ type JournalFormValues = z.infer<typeof FormSchema>;
 
 interface JournalFormProps {
   entry?: JournalEntry;
+  action: (prevState: any, formData: FormData) => Promise<any>;
 }
 
-function SubmitButton({ isEditing }: { isEditing: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-      {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-      {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
-    </Button>
-  );
-}
-
-export default function JournalForm({ entry }: JournalFormProps) {
+export default function JournalForm({ entry, action }: JournalFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const { user } = useUser();
   const isEditing = !!entry;
 
   const form = useForm<JournalFormValues>({
@@ -97,10 +90,20 @@ export default function JournalForm({ entry }: JournalFormProps) {
   }, [verseRefToAutocomplete, form, entry?.bibleReference, toast]);
 
   const onSubmit = (data: JournalFormValues) => {
+    if (!user) {
+        toast({
+            variant: 'destructive',
+            title: 'No autenticado',
+            description: 'Debes iniciar sesión para guardar una entrada.',
+        });
+        return;
+    }
+
     startTransition(async () => {
       try {
         const formData = new FormData();
-        if (entry?.id) {
+        formData.append('userId', user.uid); // Pass user ID to server action
+        if (isEditing && entry?.id) {
             formData.append('id', entry.id);
         }
         formData.append('bibleReference', data.bibleReference);
@@ -110,8 +113,12 @@ export default function JournalForm({ entry }: JournalFormProps) {
         formData.append('application', data.application);
         formData.append('tags', data.tags || '');
 
-        const action = isEditing ? updateEntry : addEntry;
-        await action(null, formData);
+        
+        const result = await action(null, formData);
+
+        if (result?.message) {
+            throw new Error(result.message);
+        }
 
         toast({
           title: isEditing ? 'Entrada actualizada' : 'Entrada creada',

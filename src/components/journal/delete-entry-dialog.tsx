@@ -17,17 +17,27 @@ import { Loader2 } from 'lucide-react';
 import { deleteEntry } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/lib/firebase/client';
 
 export function DeleteEntryDialog({ entryId, children }: { entryId: string, children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
+  const { user } = useUser();
 
   const handleDelete = () => {
+    if (!user) {
+        toast({
+            variant: 'destructive',
+            title: 'No autenticado',
+            description: 'Debes iniciar sesión para eliminar una entrada.',
+        });
+        return;
+    }
     startTransition(async () => {
       try {
-        await deleteEntry(entryId);
+        await deleteEntry(user.uid, entryId);
         toast({
           title: 'Entrada eliminada',
           description: 'Tu entrada ha sido eliminada exitosamente.',
