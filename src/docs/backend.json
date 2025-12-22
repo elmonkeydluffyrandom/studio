@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "JournalEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "JournalEntry",
+      "type": "object",
+      "description": "Represents a single journal entry in the digital bible study journal.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the JournalEntry entity."
+        },
+        "bibleVerse": {
+          "type": "string",
+          "description": "The bible verse reference for the entry (e.g., Psalms 23)."
+        },
+        "verseText": {
+          "type": "string",
+          "description": "The text of the bible verse, ideally autocompleted based on Reina Valera 1960."
+        },
+        "observation": {
+          "type": "string",
+          "description": "Context and facts related to the verse."
+        },
+        "teaching": {
+          "type": "string",
+          "description": "Theological interpretation of the verse."
+        },
+        "practicalApplication": {
+          "type": "string",
+          "description": "Personal commitments based on the verse and teaching."
+        },
+        "tagIds": {
+          "type": "array",
+          "description": "References to Tag. (Relationship: Tag N:N JournalEntry)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the entry was created."
+        }
+      },
+      "required": [
+        "id",
+        "bibleVerse",
+        "verseText",
+        "observation",
+        "teaching",
+        "practicalApplication",
+        "createdAt"
+      ]
+    },
+    "Tag": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Tag",
+      "type": "object",
+      "description": "Represents a tag that can be applied to journal entries.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Tag entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the tag (e.g., Oración, Familia)."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}/journalEntries/{journalEntryId}",
+        "definition": {
+          "entityName": "JournalEntry",
+          "schema": {
+            "$ref": "#/backend/entities/JournalEntry"
+          },
+          "description": "Stores journal entries for a specific user.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user who owns the journal entry."
+            },
+            {
+              "name": "journalEntryId",
+              "description": "The unique ID of the journal entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/tags/{tagId}",
+        "definition": {
+          "entityName": "Tag",
+          "schema": {
+            "$ref": "#/backend/entities/Tag"
+          },
+          "description": "Stores tags created by a specific user.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user who owns the tag."
+            },
+            {
+              "name": "tagId",
+              "description": "The unique ID of the tag."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure data ownership and secure access using path-based rules. Each user has a dedicated collection for their journal entries and tags, ensuring data isolation and simplified security rules. This design promotes Authorization Independence by avoiding `get()` calls in security rules and supports secure `list` operations.  The structure leverages hierarchical paths for user-owned data and continues the hierarchy for nested data."
+  }
+}
