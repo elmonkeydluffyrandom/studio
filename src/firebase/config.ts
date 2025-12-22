@@ -1,17 +1,8 @@
-
-const firebaseConfigString = process.env.NEXT_PUBLIC_FIREBASE_CONFIG;
-
-if (!firebaseConfigString) {
-    throw new Error("Missing Firebase config. Please provide NEXT_PUBLIC_FIREBASE_CONFIG environment variable.");
-}
-
-let config;
-
-try {
-    config = JSON.parse(firebaseConfigString);
-} catch (e) {
-    console.error("Failed to parse NEXT_PUBLIC_FIREBASE_CONFIG.", e);
-    throw new Error("Invalid JSON in NEXT_PUBLIC_FIREBASE_CONFIG environment variable.");
-}
-
-export const firebaseConfig = config;
+export const firebaseConfig = {
+  "projectId": "studio-1263362726-21d34",
+  "appId": "1:909834642582:web:226d09d95a4b0c35ab4eb7",
+  "apiKey": "AIzaSyDIvra58g38A7q_NakyM2X9BmLtjY0zLbI",
+  "authDomain": "studio-1263362726-21d34.firebaseapp.com",
+  "measurementId": "",
+  "messagingSenderId": "909834642582"
+};

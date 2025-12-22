@@ -1,67 +1,82 @@
 /**
- * # Core Philosophy
- * This ruleset enforces a strict, user-centric security model. All personal data, specifically 'BibliaDiarioEntry' documents, is isolated within user-specific subcollections. This "data silo" approach ensures that a user can only ever access their own information, providing strong privacy guarantees by default.
+ * This ruleset enforces a strict user-ownership model for a digital bible study journal application.
  *
- * # Data Structure
- * - `/users/{userId}/entries/{entryId}`: This is the primary data path. All journal entries for a given user are stored here. Access is strictly controlled by the `{userId}` wildcard, tying ownership directly to the authenticated user's ID.
- * - `/tags/{tagId}`: This top-level collection stores global tags that are available for all users to read. Write access is restricted to prevent users from modifying the global tag list.
+ * Core Philosophy:
+ * The security model ensures that all user-generated content, including journal entries and tags,
+ * is completely private. A user can only access, modify, or delete their own data. There is no
+ * public or shared data.
  *
- * # Key Security Decisions
- * - **Strict User Ownership**: The rules guarantee that a user can only perform read (get, list) and write (create, update, delete) operations on their own entries within `/users/{userId}/entries`. There is no mechanism for sharing or public access to entries.
- * - **Public, Read-Only Global Data**: The `/tags` collection is intentionally public for reading, allowing the application to fetch and display all available tags to any user. However, all write operations are disabled by default, requiring a future implementation of an admin role for management.
- * - **No User Profile Management**: This ruleset does not define rules for a `/users/{userId}` path, as the application's data model only specifies the `/entries` subcollection. This prevents users from reading or modifying other users' profile data.
+ * Data Structure:
+ * All data is hierarchically organized under the `/users/{userId}` path. This structure naturally
+ * isolates each user's data, making it simple and performant to secure the entire data tree
+ * for a specific user with path-based rules.
+ *   - /users/{userId}/journalEntries/{journalEntryId}
+ *   - /users/{userId}/tags/{tagId}
  *
- * # Denormalization for Authorization
- * This security model relies on a path-based ownership strategy (`/users/{userId}/...`). This is a form of structural denormalization that makes authorization checks extremely fast and simple. By nesting user data, we avoid the need for slow and costly `get()` calls to other documents to verify ownership, resulting in more performant and secure rules.
- *
- * # Structural Segregation
- * The ruleset separates private user data from public global data by placing them in different collections. Private data lives in user-specific subcollections (`/users/{userId}/entries`), while public data resides in a top-level collection (`/tags`). This clear separation simplifies rules and makes public list operations (`list /tags`) secure and efficient.
+ * Key Security Decisions:
+ * - Strict Ownership: All access is gated by matching the authenticated user's ID (`request.auth.uid`)
+ *   with the `{userId}` wildcard in the document path.
+ * - No User Listing: To protect user privacy, it is forbidden to list documents in the top-level
+ *   `/users` collection.
+ * - Prototyping Flexibility: In this prototyping phase, rules enforce *who* can access data but do
+ *   not strictly validate the *shape* of that data. This allows for rapid iteration on the frontend
+ *   without needing to update security rules for every schema change.
+ * - Authorization over Validation: For optimal performance and simplicity, authorization decisions
+ *   are made using the document path. There is no need for slow `get()` calls to other documents.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // -------------------------------------------------------------------------
-    // Helper Functions
-    // -------------------------------------------------------------------------
+    // Helper functions to improve readability and maintainability.
 
     /**
-     * Checks if the user is authenticated.
+     * Checks if a user is authenticated.
      */
     function isSignedIn() {
       return request.auth != null;
     }
 
     /**
-     * Validates if the currently authenticated user's ID matches the
-     * document's owner ID from the path. This is the core of our
-     * user-ownership model.
+     * Checks if the currently authenticated user is the owner of the document,
+     * based on the `userId` in the path.
      */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
     /**
-     * A robust check for update and delete operations. It ensures the document
-     * already exists AND that the authenticated user is the legitimate owner.
-     * This prevents unauthorized writes and errors on non-existent documents.
+     * Checks if the currently authenticated user is the owner of an *existing* document.
+     * CRITICAL: This must be used for all update and delete operations to prevent
+     * acting on non-existent documents.
      */
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
     }
 
-    // -------------------------------------------------------------------------
-    // Collection Rules
-    // -------------------------------------------------------------------------
+    /**
+     * @description Rules for the user's root document, typically storing profile information.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user creating their own user document: `create /users/user_abc`
+     * @deny (list) Any user attempting to list all user documents: `list /users`
+     * @principle Restricts access to a user's own data tree and prevents user enumeration.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if false; // Deleting user root documents is disallowed to prevent orphaning subcollections.
+    }
 
     /**
-     * @description Secures a user's private journal entries. Only the authenticated owner can read or write their own entries.
-     * @path        /users/{userId}/entries/{entryId}
-     * @allow       (get, create) A signed-in user with uid 'user123' accessing their own document at /users/user123/entries/entry_abc.
-     * @deny        (get, update) A signed-in user with uid 'user456' trying to access a document at /users/user123/entries/entry_abc.
-     * @principle   Restricts access to a user's own data tree using path-based ownership.
+     * @description Rules for a user's private journal entries.
+     * @path /users/{userId}/journalEntries/{journalEntryId}
+     * @allow (create) An authenticated user creating a journal entry in their own space: `create /users/user_abc/journalEntries/entry_123`
+     * @deny (get) An authenticated user trying to read another user's entry: `get /users/user_xyz/journalEntries/entry_456`
+     * @principle Enforces strict document ownership for all read and write operations.
      */
-    match /users/{userId}/entries/{entryId} {
+    match /users/{userId}/journalEntries/{journalEntryId} {
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
       allow create: if isOwner(userId);
@@ -70,20 +85,18 @@ service cloud.firestore {
     }
 
     /**
-     * @description Manages global tags. All users, including unauthenticated ones, can read the list of tags. Writes are disabled to protect the integrity of the global tag set.
-     * @path        /tags/{tagId}
-     * @allow       (get, list) Any user, signed-in or anonymous, fetching the document at /tags/faith.
-     * @deny        (create, update) Any signed-in user trying to create a new tag at /tags/new_tag.
-     * @principle   Enables public read access for shared application data while preventing modification by unauthorized users.
+     * @description Rules for a user's private tags for organizing journal entries.
+     * @path /users/{userId}/tags/{tagId}
+     * @allow (list) An authenticated user listing their own tags: `list /users/user_abc/tags`
+     * @deny (update) An authenticated user trying to update another user's tag: `update /users/user_xyz/tags/tag_789`
+     * @principle Enforces strict document ownership for all read and write operations.
      */
-    match /tags/{tagId} {
-      allow get: if true;
-      allow list: if true;
-      // CRITICAL: Writes are disabled. An admin role or a Cloud Function with trusted credentials
-      // is required to manage the global tags collection securely.
-      allow create: if false; // TODO: Implement admin-only access for creating new tags.
-      allow update: if false; // TODO: Implement admin-only access for updating existing tags.
-      allow delete: if false; // TODO: Implement admin-only access for deleting tags.
+    match /users/{userId}/tags/{tagId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
   }
 }

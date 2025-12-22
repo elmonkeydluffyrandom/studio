@@ -1,44 +1,43 @@
-
 {
   "entities": {
-    "BibliaDiarioEntry": {
+    "JournalEntry": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "BibliaDiarioEntry",
+      "title": "JournalEntry",
       "type": "object",
-      "description": "Represents a single entry in the BibliaDiario application, containing the Bible verse, observation, teaching, practical application, and associated tags.",
+      "description": "Represents a single journal entry in the digital bible study journal.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the BibliaDiarioEntry entity."
+          "description": "Unique identifier for the JournalEntry entity."
         },
         "bibleVerse": {
           "type": "string",
-          "description": "The Bible verse reference (e.g., Psalms 23)."
+          "description": "The bible verse reference for the entry (e.g., Psalms 23)."
         },
         "verseText": {
           "type": "string",
-          "description": "The text of the Bible verse (Reina Valera 1960)."
+          "description": "The text of the bible verse, ideally autocompleted based on Reina Valera 1960."
         },
         "observation": {
           "type": "string",
-          "description": "Contextual observations and relevant facts related to the verse."
+          "description": "Context and facts related to the verse."
         },
         "teaching": {
           "type": "string",
-          "description": "Theological interpretation and teaching derived from the verse."
+          "description": "Theological interpretation of the verse."
         },
         "practicalApplication": {
           "type": "string",
-          "description": "Personal commitments and practical applications of the teaching."
+          "description": "Personal commitments based on the verse and teaching."
         },
         "tagIds": {
           "type": "array",
-          "description": "References to Tag. (Relationship: BibliaDiarioEntry N:N Tag)",
+          "description": "References to Tag. (Relationship: Tag N:N JournalEntry)",
           "items": {
             "type": "string"
           }
         },
-        "creationTimestamp": {
+        "createdAt": {
           "type": "string",
           "description": "Timestamp of when the entry was created.",
           "format": "date-time"
@@ -51,14 +50,14 @@
         "observation",
         "teaching",
         "practicalApplication",
-        "creationTimestamp"
+        "createdAt"
       ]
     },
     "Tag": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Tag",
       "type": "object",
-      "description": "Represents a tag that can be associated with BibliaDiario entries.",
+      "description": "Represents a tag that can be applied to journal entries.",
       "properties": {
         "id": {
           "type": "string",
@@ -77,48 +76,53 @@
   },
   "auth": {
     "providers": [
-      "google.com"
+      "password",
+      "anonymous"
     ]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}/entries/{entryId}",
+        "path": "/users/{userId}/journalEntries/{journalEntryId}",
         "definition": {
-          "entityName": "BibliaDiarioEntry",
+          "entityName": "JournalEntry",
           "schema": {
-            "$ref": "#/backend/entities/BibliaDiarioEntry"
+            "$ref": "#/backend/entities/JournalEntry"
           },
-          "description": "Stores BibliaDiario entries for each user. Path-based ownership ensures only the authenticated user can access their entries.",
+          "description": "Stores journal entries for a specific user.",
           "params": [
             {
               "name": "userId",
-              "description": "The unique identifier for the user."
+              "description": "The ID of the user who owns the journal entry."
             },
             {
-              "name": "entryId",
-              "description": "The unique identifier for the BibliaDiario entry."
+              "name": "journalEntryId",
+              "description": "The unique ID of the journal entry."
             }
           ]
         }
       },
       {
-        "path": "/tags/{tagId}",
+        "path": "/users/{userId}/tags/{tagId}",
         "definition": {
           "entityName": "Tag",
           "schema": {
             "$ref": "#/backend/entities/Tag"
           },
-          "description": "Stores global tags available to all users. This collection is globally readable, but only admins can create/update/delete tags (this needs to be managed through a dedicated admin role, existence over content).",
+          "description": "Stores tags created by a specific user.",
           "params": [
             {
+              "name": "userId",
+              "description": "The ID of the user who owns the tag."
+            },
+            {
               "name": "tagId",
-              "description": "The unique identifier for the tag."
+              "description": "The unique ID of the tag."
             }
           ]
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to provide a secure and scalable solution for the BibliaDiario application. The structure uses path-based ownership for user-specific data and denormalization to avoid using `get()` calls in security rules, ensuring authorization independence. This allows for atomic operations and easier debugging.\n\nThe core structure centers around the `users/{userId}` collection. Each user owns their `BibliaDiarioEntry` documents within a subcollection. This allows for simple and efficient security rules based on the user's `uid`.  The `tagIds` are stored directly on the `BibliaDiarioEntry` document. This facilitates querying and listing entries efficiently.\n\nQAPs are supported through structural segregation and path-based ownership.  Listing operations are secured by scoping them to the user's specific collection (`users/{userId}/entries`). The security rules will ensure that only the authenticated user can access their own entries. This approach allows for efficient and secure `list` operations without complex filtering within the rules."
+    "reasoning": "The Firestore structure is designed to ensure data ownership and secure access using path-based rules. Each user has a dedicated collection for their journal entries and tags, ensuring data isolation and simplified security rules. This design promotes Authorization Independence by avoiding `get()` calls in security rules and supports secure `list` operations.  The structure leverages hierarchical paths for user-owned data and continues the hierarchy for nested data."
   }
 }
