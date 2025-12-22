@@ -33,11 +33,8 @@ export default function EntryDetailPage() {
     return <Login />;
   }
 
+  // After loading, if the entry is not found, show a specific message.
   if (!entry && !isEntryLoading) {
-    notFound();
-  }
-  
-  if (!entry) {
     return (
         <div className="container mx-auto max-w-4xl text-center p-8">
             <h1 className="text-2xl font-bold">Entrada no encontrada</h1>
@@ -51,6 +48,11 @@ export default function EntryDetailPage() {
     );
   }
 
+  // This check is necessary for TypeScript to be sure 'entry' is not null.
+  if (!entry) {
+    return null; 
+  }
+
   return (
     <div className="container mx-auto max-w-4xl print-container">
       <header className="mb-8 no-print">
@@ -62,19 +64,19 @@ export default function EntryDetailPage() {
         </Button>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
           <div>
-            <h1 className="text-4xl font-headline font-bold text-foreground print-title">{entry?.bibleVerse}</h1>
+            <h1 className="text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {entry?.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
+              {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
             </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" asChild>
-              <Link href={`/entry/${entry?.id}/edit`}>
+              <Link href={`/entry/${entry.id}/edit`}>
                 <Edit className="mr-2 h-4 w-4" />
                 Editar
               </Link>
             </Button>
-            <DeleteEntryDialog entryId={entry?.id ?? ''}>
+            <DeleteEntryDialog entryId={entry.id ?? ''}>
               <Button variant="destructive" >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Eliminar
@@ -89,32 +91,32 @@ export default function EntryDetailPage() {
         <div className="print-section">
           <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura (Scripture)</h2>
           <blockquote className="mt-2 border-l-4 border-primary pl-4 italic text-foreground/80 print-text">
-            {entry?.verseText}
+            {entry.verseText}
           </blockquote>
         </div>
 
         <div className="print-section">
           <h2 className="text-2xl font-headline font-semibold print-section-title">Observación (Observation)</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-            {entry?.observation}
+            {entry.observation}
           </p>
         </div>
         
         <div className="print-section">
           <h2 className="text-2xl font-headline font-semibold print-section-title">Enseñanza (Application)</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-            {entry?.teaching}
+            {entry.teaching}
           </p>
         </div>
 
         <div className="print-section">
           <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación Práctica (Prayer)</h2>
           <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-            {entry?.practicalApplication}
+            {entry.practicalApplication}
           </p>
         </div>
 
-        {entry?.tagIds && entry.tagIds.length > 0 && (
+        {entry.tagIds && entry.tagIds.length > 0 && (
           <div className="print-section print-tags">
             <h3 className="text-lg font-headline font-semibold print-section-title">Etiquetas</h3>
             <div className="mt-2 flex flex-wrap gap-2">
