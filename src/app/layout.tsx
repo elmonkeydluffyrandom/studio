@@ -11,6 +11,12 @@ import { ThemeProvider } from '@/components/theme-provider';
 export const metadata: Metadata = {
   title: 'BibliaDiario',
   description: 'Tu diario de estudio bíblico personal',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'BibliaDiario',
+  },
 };
 
 export default function RootLayout({

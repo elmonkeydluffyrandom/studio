@@ -1,0 +1,21 @@
+{
+  "name": "Biblia Diario",
+  "short_name": "Diario",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f4f8",
+  "theme_color": "#a0c4ff",
+  "description": "Tu diario de estudio bíblico personal.",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
