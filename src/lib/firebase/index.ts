@@ -1,20 +1,24 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'
+import { getFirestore } from 'firebase/firestore';
+import getConfig from 'next/config';
 
 // This function is NOT 'use client' and can be used on the server.
 export function initializeFirebase() {
-    const firebaseConfigStr = process.env.NEXT_PUBLIC_FIREBASE_CONFIG;
+    const { publicRuntimeConfig } = getConfig();
+    const firebaseConfigStr = publicRuntimeConfig?.firebaseConfig;
+    
     if (!firebaseConfigStr) {
-        throw new Error("Firebase config not found in environment variables. Make sure NEXT_PUBLIC_FIREBASE_CONFIG is set.");
+        throw new Error("Firebase config not found in Next.js public runtime configuration. Make sure it's set in next.config.ts.");
     }
     
     let firebaseConfig;
     try {
-        firebaseConfig = JSON.parse(firebaseConfigStr);
+        // The config is already an object, no need to parse
+        firebaseConfig = firebaseConfigStr;
     } catch (e) {
-        console.error("Failed to parse NEXT_PUBLIC_FIREBASE_CONFIG", e);
-        throw new Error("Invalid Firebase config in environment variables.");
+        console.error("Failed to process firebaseConfig", e);
+        throw new Error("Invalid Firebase config in runtime configuration.");
     }
 
     if (!firebaseConfig.projectId) {

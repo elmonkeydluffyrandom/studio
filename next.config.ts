@@ -36,6 +36,10 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  publicRuntimeConfig: {
+    // Will be available on both server and client
+    firebaseConfig: JSON.parse(process.env.NEXT_PUBLIC_FIREBASE_CONFIG || '{}'),
+  },
 };
 
 export default nextConfig;

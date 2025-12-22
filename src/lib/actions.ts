@@ -5,6 +5,10 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { doc, addDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { initializeFirebase } from '@/lib/firebase';
+import { setDoc } from 'firebase/firestore';
+import { errorEmitter } from '@/lib/firebase/error-emitter';
+import { FirestorePermissionError } from '@/lib/firebase/errors';
+
 
 const FormSchema = z.object({
   id: z.string(),
@@ -64,18 +68,23 @@ export async function addEntry(prevState: State, formData: FormData) {
     createdAt: serverTimestamp(),
   };
 
-  let docRef;
+  
   try {
     const { firestore } = initializeFirebase();
     const entriesCollection = collection(firestore, 'users', userId, 'entries');
-    docRef = await addDoc(entriesCollection, newEntry);
-  } catch(error) {
-    console.error("Error adding document: ", error);
-    return { message: 'Error al guardar en la base de datos.' };
+    const docRef = await addDoc(entriesCollection, newEntry);
+    revalidatePath('/');
+    redirect(`/entry/${docRef.id}`);
+
+  } catch(error: any) {
+     if (error instanceof FirestorePermissionError) {
+      errorEmitter.emit('permission-error', error);
+    } else {
+      console.error("Error adding document: ", error);
+      return { message: 'Error al guardar en la base de datos.' };
+    }
   }
   
-  revalidatePath('/');
-  redirect(`/entry/${docRef.id}`);
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
@@ -109,9 +118,13 @@ export async function updateEntry(prevState: State, formData: FormData) {
       ...data,
       tags: data.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
     });
-  } catch (error) {
-    console.error("Error updating document: ", error);
-    return { message: 'Error al actualizar en la base de datos.' };
+  } catch (error: any) {
+    if (error instanceof FirestorePermissionError) {
+      errorEmitter.emit('permission-error', error);
+    } else {
+      console.error("Error updating document: ", error);
+      return { message: 'Error al actualizar en la base de datos.' };
+    }
   }
 
   revalidatePath('/');
@@ -133,9 +146,13 @@ export async function deleteEntry(userId: string, id: string) {
     const { firestore } = initializeFirebase();
     const entryRef = doc(firestore, 'users', userId, 'entries', id);
     await deleteDoc(entryRef);
-  } catch(error) {
-    console.error("Error deleting document: ", error);
-    throw new Error('Error al eliminar de la base de datos.');
+  } catch(error: any) {
+     if (error instanceof FirestorePermissionError) {
+      errorEmitter.emit('permission-error', error);
+    } else {
+      console.error("Error deleting document: ", error);
+      throw new Error('Error al eliminar de la base de datos.');
+    }
   }
 
   revalidatePath('/');
