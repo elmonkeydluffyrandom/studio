@@ -149,6 +149,7 @@ export default function EntryDetailPage() {
                     name="bibleVerse"
                     value={formData.bibleVerse}
                     onChange={handleInputChange}
+                    placeholder="Ej: Salmos 23:1"
                     className="text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0"
                  />
             ) : (
@@ -197,6 +198,7 @@ export default function EntryDetailPage() {
                 name="verseText"
                 value={formData.verseText}
                 onChange={handleInputChange}
+                placeholder="Escribe aquí el texto del versículo..."
                 className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed min-h-[120px]"
               />
           ) : (
@@ -213,6 +215,7 @@ export default function EntryDetailPage() {
                 name="observation"
                 value={formData.observation}
                 onChange={handleInputChange}
+                placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
                 className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed min-h-[150px]"
               />
           ) : (
@@ -229,6 +232,7 @@ export default function EntryDetailPage() {
                 name="teaching"
                 value={formData.teaching}
                 onChange={handleInputChange}
+                placeholder="¿Qué significa este pasaje? ¿Qué principio o verdad teológica enseña sobre Dios, el hombre, o la salvación?"
                 className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed min-h-[150px]"
               />
           ) : (
@@ -245,6 +249,7 @@ export default function EntryDetailPage() {
                 name="practicalApplication"
                 value={formData.practicalApplication}
                 onChange={handleInputChange}
+                placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
                 className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed min-h-[150px]"
               />
           ) : (
@@ -262,6 +267,7 @@ export default function EntryDetailPage() {
                     name="tagIds"
                     value={formData.tagIds}
                     onChange={handleInputChange}
+                    placeholder="Ej: Oración, Familia, Fe"
                     className="mt-2"
                  />
             ) : (
