@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Form,
@@ -21,11 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
-import { useDebounce } from '@/lib/hooks/use-debounce';
-import { runFlow } from '@genkit-ai/next/client';
-import { verseAutocompletion } from '@/ai/flows/verse-autocompletion';
 import { useUser } from '@/firebase';
-import { addEntry, updateEntry } from '@/lib/actions';
 
 const FormSchema = z.object({
   bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
@@ -61,33 +57,6 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
       tagIds: entry?.tagIds?.join(', ') || '',
     },
   });
-
-  const [isAutocompleting, setIsAutocompleting] = useState(false);
-  const verseRefToAutocomplete = useDebounce(form.watch('bibleVerse'), 1000);
-
-  useEffect(() => {
-    async function autocompleteVerse() {
-      if (verseRefToAutocomplete && verseRefToAutocomplete.length > 4 && verseRefToAutocomplete !== entry?.bibleVerse) {
-        setIsAutocompleting(true);
-        try {
-          const result = await runFlow(verseAutocompletion, { verseReference: verseRefToAutocomplete });
-          if(result.verseText) {
-            form.setValue('verseText', result.verseText, { shouldValidate: true });
-          }
-        } catch (error) {
-          console.error("Verse autocompletion failed:", error);
-          toast({
-            variant: "destructive",
-            title: "Error de autocompletado",
-            description: "No se pudo obtener el texto del versículo.",
-          });
-        } finally {
-          setIsAutocompleting(false);
-        }
-      }
-    }
-    autocompleteVerse();
-  }, [verseRefToAutocomplete, form, entry?.bibleVerse, toast]);
 
   const onSubmit = (data: JournalFormValues) => {
     if (!user) {
@@ -166,18 +135,15 @@ export default function JournalForm({ entry, action }: JournalFormProps) {
               name="verseText"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    Texto del Versículo
-                    {isAutocompleting && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                  </FormLabel>
+                  <FormLabel>Texto del Versículo</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="El texto del versículo aparecerá aquí..."
+                      placeholder="Escribe aquí el texto del versículo..."
                       className="min-h-[120px] font-serif"
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>Se autocompletará basado en la cita. Versión Reina Valera 1960.</FormDescription>
+                  <FormDescription>Escribe manualmente el texto del versículo que estás estudiando.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
