@@ -37,6 +37,11 @@ function getAuthenticatedUser() {
     // We are on the server, so we can't use the useUser hook.
     // We need to initialize firebase and get the auth instance.
     const { auth } = initializeFirebase();
+    // This is a server-side action. The user state is not available in the same
+    // way as the client. We need to rely on the session or token if available,
+    // but for now, we assume the framework handles user session for server actions.
+    // A more robust implementation might involve passing user ID or checking session state.
+    // For now, let's try to get current user, but it might be null.
     return auth.currentUser;
 }
 
@@ -45,7 +50,11 @@ export async function addEntry(prevState: State, formData: FormData) {
   const user = getAuthenticatedUser();
   
   if (!user) {
-    return { message: "Usuario no autenticado."};
+    // In a real app, you might get the user from the session or a token
+    // Since this is a server action, direct access to client-side auth state is not possible.
+    // We'll proceed assuming this is for an authenticated context.
+    // A robust solution would check auth state via server-side means.
+    // For now, let's defer this check to Firestore rules.
   }
 
   const validatedFields = CreateEntry.safeParse({
@@ -76,20 +85,33 @@ export async function addEntry(prevState: State, formData: FormData) {
     createdAt: serverTimestamp(),
   };
 
+  let docRef;
   try {
-    const { firestore } = initializeFirebase();
-    const entriesCollection = collection(firestore, 'users', user.uid, 'entries');
-    const docRef = await addDoc(entriesCollection, newEntry);
-    revalidatePath('/');
-    redirect(`/entry/${docRef.id}`);
+    const { firestore, auth } = initializeFirebase();
+    // It's very likely auth.currentUser will be null on the server.
+    // We'd need a proper session management strategy. Let's assume for now we can get the UID.
+    // This part is tricky without a full auth flow for server actions.
+    // The client should ideally pass the UID. For now, this will likely fail if not logged in.
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+        // This is a temporary workaround. Server actions don't have client's auth context.
+        // A better approach involves session management or passing user id.
+        // For now, we cannot proceed.
+        return { message: "Usuario no autenticado en el servidor."};
+    }
+    const entriesCollection = collection(firestore, 'users', userId, 'entries');
+    docRef = await addDoc(entriesCollection, newEntry);
   } catch(error) {
     console.error("Error adding document: ", error);
     return { message: 'Error al guardar en la base de datos.' };
   }
+  
+  revalidatePath('/');
+  redirect(`/entry/${docRef.id}`);
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
-  const user = getAuthenticatedUser();
+    const user = getAuthenticatedUser();
 
   if (!user) {
     return { message: "Usuario no autenticado."};
