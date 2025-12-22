@@ -1,8 +1,9 @@
 'use client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/firebase';
+import { useAuth, initiateAnonymousSignIn } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { Separator } from '../ui/separator';
 
 function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
@@ -29,6 +30,12 @@ export default function Login() {
     }
   };
 
+  const handleAnonymousSignIn = () => {
+    if (auth) {
+        initiateAnonymousSignIn(auth);
+    }
+  }
+
   return (
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center">
       <Card className="w-full max-w-md">
@@ -38,10 +45,21 @@ export default function Login() {
             Inicia sesión para guardar y administrar tus reflexiones bíblicas.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
           <Button onClick={handleGoogleSignIn} className="w-full">
             <GoogleIcon className="mr-2 h-5 w-5" />
             <span>Iniciar sesión con Google</span>
+          </Button>
+          <div className="relative">
+            <Separator />
+            <div className="absolute inset-0 flex items-center">
+                <span className="w-full text-center">
+                    <span className="bg-background px-2 text-xs uppercase text-muted-foreground">O</span>
+                </span>
+            </div>
+          </div>
+          <Button onClick={handleAnonymousSignIn} variant="secondary" className="w-full">
+            <span>Continuar como invitado</span>
           </Button>
         </CardContent>
       </Card>
