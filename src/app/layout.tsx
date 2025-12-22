@@ -5,6 +5,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/layout/app-sidebar';
 import AppHeader from '@/components/layout/app-header';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
   title: 'BibliaDiario',
@@ -27,18 +29,22 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('font-body antialiased', 'min-h-screen bg-background')}>
-        <SidebarProvider>
-          <Sidebar>
-            <AppSidebar />
-          </Sidebar>
-          <SidebarInset>
-            <AppHeader />
-            <main className="flex-1 p-4 md:p-6 lg:p-8">
-              {children}
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
-        <Toaster />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <FirebaseClientProvider>
+            <SidebarProvider>
+              <Sidebar>
+                <AppSidebar />
+              </Sidebar>
+              <SidebarInset>
+                <AppHeader />
+                <main className="flex-1 p-4 md:p-6 lg:p-8">
+                  {children}
+                </main>
+              </SidebarInset>
+            </SidebarProvider>
+            <Toaster />
+          </FirebaseClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

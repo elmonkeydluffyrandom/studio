@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore";
+
 export interface JournalEntry {
   id: string;
   bibleReference: string;
@@ -6,5 +8,5 @@ export interface JournalEntry {
   teaching: string;
   application: string;
   tags: string[];
-  createdAt: string; // Using ISO string for simplicity
+  createdAt: Timestamp; 
 }

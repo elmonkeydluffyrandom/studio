@@ -46,7 +46,7 @@ export default function JournalCard({ entry }: JournalCardProps) {
         </CardContent>
         <CardFooter>
           <div className="flex flex-wrap gap-2">
-            {entry.tags.slice(0, 3).map(tag => (
+            {entry.tags && entry.tags.slice(0, 3).map(tag => (
               <Badge key={tag} variant="secondary">
                 {tag}
               </Badge>

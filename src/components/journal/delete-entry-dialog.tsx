@@ -13,31 +13,33 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { deleteEntry } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 export function DeleteEntryDialog({ entryId, children }: { entryId: string, children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleDelete = () => {
     startTransition(async () => {
-      const result = await deleteEntry(entryId);
-      if (result?.message) {
-        toast({
-          variant: 'destructive',
-          title: 'Error al eliminar',
-          description: result.message,
-        });
-      } else {
+      try {
+        await deleteEntry(entryId);
         toast({
           title: 'Entrada eliminada',
           description: 'Tu entrada ha sido eliminada exitosamente.',
         });
         setOpen(false);
-        // Redirect is handled by the server action
+        router.push('/');
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: 'Error al eliminar',
+          description: error.message || 'No se pudo eliminar la entrada.',
+        });
       }
     });
   };

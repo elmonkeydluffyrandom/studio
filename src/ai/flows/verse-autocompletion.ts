@@ -30,17 +30,18 @@ export async function verseAutocompletion(input: VerseAutocompletionInput): Prom
   return verseAutocompletionFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'verseAutocompletionPrompt',
-  input: {schema: VerseAutocompletionInputSchema},
-  output: {schema: VerseAutocompletionOutputSchema},
-  prompt: `You are a helpful assistant that retrieves bible verses from the Reina Valera 1960 bible.
+const getVerseTool = ai.defineTool(
+    {
+        name: 'getVerse',
+        description: 'Retrieves the text of a Bible verse from the Reina Valera 1960 version.',
+        inputSchema: z.object({ verseReference: z.string() }),
+        outputSchema: z.object({ verseText: z.string() }),
+    },
+    async (input) => {
+        return { verseText: await getVerse(input.verseReference) ?? "No se encontró el versículo." };
+    }
+);
 
-  The user will provide a verse reference, and you should return the corresponding verse text.
-
-  Verse Reference: {{{verseReference}}}
-  `,
-});
 
 const verseAutocompletionFlow = ai.defineFlow(
   {
@@ -48,20 +49,10 @@ const verseAutocompletionFlow = ai.defineFlow(
     inputSchema: VerseAutocompletionInputSchema,
     outputSchema: VerseAutocompletionOutputSchema,
   },
-  async input => {
-    // Before calling the LLM, check if the verse can be retrieved directly
-    // from the bible-service.
-    try {
-      const verseText = await getVerse(input.verseReference);
-      if (verseText) {
-        return { verseText };
-      }
-    } catch (e) {
-      // Verse not found in local data, proceed to LLM.
-      console.log("Verse not found in bible-service.  Using LLM.");
-    }
-
-    const {output} = await prompt(input);
-    return output!;
+  async (input) => {
+    // For this specific flow, we always want to call the tool.
+    // We can call the tool directly instead of asking the model to do it.
+    const toolOutput = await getVerseTool({ verseReference: input.verseReference });
+    return { verseText: toolOutput.verseText };
   }
 );

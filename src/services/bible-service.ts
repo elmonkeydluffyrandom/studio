@@ -7,11 +7,16 @@
  * @returns The verse text as a string, or null if not found.
  */
 export async function getVerse(verseReference: string): Promise<string | null> {
-  // For this mock implementation, we always return null to allow the GenAI flow
-  // to demonstrate its capability to fetch the verse using the LLM.
-  // A real implementation might look like:
-  // const response = await fetch(`https://api.bible.com/v1/...?q=${verseReference}`);
-  // const data = await response.json();
-  // return data.text;
-  return null;
+    try {
+        const response = await fetch(`https://bible-api.com/${verseReference}?translation=rvr1960`);
+        if (!response.ok) {
+            console.error("Bible API error:", response.status, response.statusText);
+            return `No se pudo encontrar el versículo: ${verseReference}`;
+        }
+        const data = await response.json();
+        return data.text.trim();
+    } catch (error) {
+        console.error("Error fetching verse:", error);
+        return `Error al buscar el versículo: ${verseReference}.`;
+    }
 }

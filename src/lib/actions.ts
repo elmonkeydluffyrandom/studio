@@ -3,11 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { mockEntries } from './mock-data';
-import type { JournalEntry } from './types';
+import { getFirestore, doc, addDoc, updateDoc, deleteDoc, getDoc, collection, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase/index';
+import { getAuth } from 'firebase/auth';
 
-// Simulate a database delay
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const FormSchema = z.object({
   id: z.string(),
@@ -34,17 +33,14 @@ export type State = {
   message?: string | null;
 };
 
-export async function getEntries(): Promise<JournalEntry[]> {
-  await sleep(500);
-  return mockEntries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export async function getEntry(id: string): Promise<JournalEntry | undefined> {
-  await sleep(300);
-  return mockEntries.find(entry => entry.id === id);
-}
-
 export async function addEntry(prevState: State, formData: FormData) {
+  const { firestore, auth } = initializeFirebase();
+  const user = auth.currentUser;
+  
+  if (!user) {
+    return { message: "Usuario no autenticado."};
+  }
+
   const validatedFields = CreateEntry.safeParse({
     bibleReference: formData.get('bibleReference'),
     verseText: formData.get('verseText'),
@@ -63,25 +59,36 @@ export async function addEntry(prevState: State, formData: FormData) {
 
   const { bibleReference, verseText, observation, teaching, application, tags } = validatedFields.data;
   
-  const newEntry: JournalEntry = {
-    id: String(Date.now()),
+  const newEntry = {
     bibleReference,
     verseText,
     observation,
     teaching,
     application,
     tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-    createdAt: new Date().toISOString(),
+    createdAt: serverTimestamp(),
   };
 
-  await sleep(500);
-  mockEntries.unshift(newEntry);
+  try {
+    const entriesCollection = collection(firestore, 'users', user.uid, 'entries');
+    await addDoc(entriesCollection, newEntry);
+  } catch(error) {
+    console.error("Error adding document: ", error);
+    return { message: 'Error al guardar en la base de datos.' };
+  }
 
   revalidatePath('/');
   redirect('/');
 }
 
 export async function updateEntry(prevState: State, formData: FormData) {
+  const { firestore, auth } = initializeFirebase();
+  const user = auth.currentUser;
+
+  if (!user) {
+    return { message: "Usuario no autenticado."};
+  }
+
   const validatedFields = UpdateEntry.safeParse({
     id: formData.get('id'),
     bibleReference: formData.get('bibleReference'),
@@ -100,20 +107,17 @@ export async function updateEntry(prevState: State, formData: FormData) {
   }
 
   const { id, ...data } = validatedFields.data;
-  const entryIndex = mockEntries.findIndex(entry => entry.id === id);
-
-  if (entryIndex === -1) {
-    return { message: 'Entrada no encontrada.' };
+  
+  try {
+    const entryRef = doc(firestore, 'users', user.uid, 'entries', id);
+    await updateDoc(entryRef, {
+      ...data,
+      tags: data.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+    });
+  } catch (error) {
+    console.error("Error updating document: ", error);
+    return { message: 'Error al actualizar en la base de datos.' };
   }
-
-  await sleep(500);
-
-  const updatedEntry = {
-    ...mockEntries[entryIndex],
-    ...data,
-    tags: data.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-  };
-  mockEntries[entryIndex] = updatedEntry;
 
   revalidatePath('/');
   revalidatePath(`/entry/${id}`);
@@ -122,13 +126,25 @@ export async function updateEntry(prevState: State, formData: FormData) {
 }
 
 export async function deleteEntry(id: string) {
-  await sleep(500);
-  const index = mockEntries.findIndex(entry => entry.id === id);
-  if (index !== -1) {
-    mockEntries.splice(index, 1);
-    revalidatePath('/');
-    redirect('/');
-  } else {
-    return { message: 'Entrada no encontrada.' };
+  const { firestore, auth } = initializeFirebase();
+  const user = auth.currentUser;
+
+  if (!user) {
+    return { message: "Usuario no autenticado."};
   }
+  
+  if (!id) {
+    return { message: 'ID de entrada no proporcionado.' };
+  }
+
+  try {
+    const entryRef = doc(firestore, 'users', user.uid, 'entries', id);
+    await deleteDoc(entryRef);
+  } catch(error) {
+    console.error("Error deleting document: ", error);
+    return { message: 'Error al eliminar de la base de datos.' };
+  }
+
+  revalidatePath('/');
+  redirect('/');
 }

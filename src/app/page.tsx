@@ -5,27 +5,31 @@ import { PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { getEntries } from '@/lib/actions';
 import JournalList from '@/components/journal/journal-list';
 import type { JournalEntry } from '@/lib/types';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import Login from '@/components/auth/login';
+import { collection, query, orderBy } from 'firebase/firestore';
+
 
 // This is a client component, but we fetch initial data and then manage state
 export default function DashboardPage() {
-  const [entries, setEntries] = React.useState<JournalEntry[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = React.useState(true);
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
 
-  React.useEffect(() => {
-    async function loadEntries() {
-      setIsLoading(true);
-      const fetchedEntries = await getEntries();
-      setEntries(fetchedEntries);
-      setIsLoading(false);
-    }
-    loadEntries();
-  }, []);
+  const entriesRef = useMemoFirebase(
+    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'entries'), orderBy('createdAt', 'desc')) : null,
+    [user, firestore]
+  );
+
+  const { data: entries, isLoading: areEntriesLoading } = useCollection<JournalEntry>(entriesRef);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const isLoading = areEntriesLoading || isUserLoading;
 
   const filteredEntries = useMemo(() => {
+    if (!entries) return [];
     if (!searchTerm) {
       return entries;
     }
@@ -34,9 +38,23 @@ export default function DashboardPage() {
       entry.observation.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.teaching.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.application.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      (entry.tags && entry.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
     );
   }, [entries, searchTerm]);
+  
+  if (isUserLoading) {
+     return (
+        <div className="container mx-auto">
+             <div className="flex justify-center items-center h-64">
+                <div className="text-2xl font-headline text-muted-foreground">Cargando...</div>
+            </div>
+        </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   return (
     <div className="container mx-auto">
@@ -63,7 +81,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <JournalList entries={filteredEntries} isLoading={isLoading} />
+      <JournalList entries={filteredEntries || []} isLoading={isLoading} />
     </div>
   );
 }

@@ -1,8 +1,9 @@
+// @ts-nocheck
 export const firebaseConfig = {
-  "projectId": "studio-1263362726-21d34",
-  "appId": "1:909834642582:web:226d09d95a4b0c35ab4eb7",
-  "apiKey": "AIzaSyDIvra58g38A7q_NakyM2X9BmLtjY0zLbI",
-  "authDomain": "studio-1263362726-21d34.firebaseapp.com",
-  "measurementId": "",
-  "messagingSenderId": "909834642582"
+  "projectId": "biblia-diario",
+  "appId": "1:652822802146:web:61a879e623b2e555518171",
+  "storageBucket": "biblia-diario.appspot.com",
+  "apiKey": process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  "authDomain": "biblia-diario.firebaseapp.com",
+  "messagingSenderId": "652822802146"
 };
