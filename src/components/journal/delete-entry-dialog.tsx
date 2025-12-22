@@ -12,15 +12,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 
-// This component can now accept a trigger from its children,
-// making it more flexible to be used within other components like DropdownMenu.
 export function DeleteEntryDialog({ entryId, children }: { entryId: string, children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -29,8 +26,7 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = () => {
     if (!user || !firestore) {
         toast({
             variant: 'destructive',
@@ -51,6 +47,10 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
         setOpen(false);
         // Refresh the current page to reflect the deletion
         router.refresh(); 
+        // If on the detail page, navigate back to dashboard
+        if (window.location.pathname.includes('/entry/')) {
+            router.push('/');
+        }
       } catch (error: any) {
         console.error("Error deleting entry:", error);
         toast({
@@ -64,11 +64,17 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
 
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     setOpen(true);
+  }
+  
+  const handleOpenChange = (isOpen: boolean) => {
+    // This function now controls the dialog's state
+    setOpen(isOpen);
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogTrigger asChild onClick={handleTriggerClick}>
         {children}
       </AlertDialogTrigger>
@@ -80,9 +86,9 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={(e) => e.stopPropagation()} disabled={isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogCancel onClick={(e) => { e.stopPropagation(); setOpen(false);}} disabled={isPending}>Cancelar</AlertDialogCancel>
           <AlertDialogAction
-            onClick={handleDelete}
+            onClick={(e) => { e.stopPropagation(); handleDelete(); }}
             disabled={isPending}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >

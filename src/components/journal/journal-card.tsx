@@ -22,19 +22,9 @@ interface JournalCardProps {
 export default function JournalCard({ entry }: JournalCardProps) {
   const image = PlaceHolderImages.find(img => img.id === 'journal-card-bg');
 
-  const handleCardClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    const url = `/entry/${entry.id}`;
-    console.log("Navegando a:", url);
-
-    // Stop propagation if the click is on a dropdown menu trigger to prevent navigation
-    if ((e.target as HTMLElement).closest('[data-radix-collection-item]')) {
-      e.preventDefault();
-    }
-  };
-
   return (
     <Card className="flex h-full flex-col overflow-hidden transition-all duration-300 ease-in-out hover:shadow-lg hover:border-primary/50">
-       <Link href={`/entry/${entry.id}`} onClick={handleCardClick} className="group block flex-grow">
+       <Link href={`/entry/${entry.id}`} className="group block flex-grow">
         <CardHeader className="relative h-24 p-0">
           {image && (
              <Image 
