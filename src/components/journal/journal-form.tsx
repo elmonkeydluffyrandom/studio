@@ -83,10 +83,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         return;
     }
 
-    startTransition(async () => {
-      try {
+    startTransition(() => {
         const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
-        
         const completeBibleVerse = `${data.bibleBook} ${data.bibleVerse}`;
 
         const entryData = {
@@ -97,18 +95,32 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
         if (isEditing && entry?.id) {
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-            await setDoc(entryRef, {
+            setDoc(entryRef, {
                 ...entryData,
                 updatedAt: Timestamp.now()
-            }, { merge: true });
+            }, { merge: true }).catch(error => {
+                console.error("Error updating entry:", error);
+                if (error.code === 'permission-denied') {
+                    const permissionError = new FirestorePermissionError({
+                        path: entryRef.path,
+                        operation: 'update',
+                        requestResourceData: entryData,
+                    });
+                    errorEmitter.emit('permission-error', permissionError);
+                } else {
+                   toast({
+                    variant: 'destructive',
+                    title: 'Error al actualizar',
+                    description: error.message || 'No se pudo guardar la entrada.',
+                    });
+                }
+            });
             
             toast({
               title: 'Entrada actualizada',
               description: 'Tu entrada ha sido guardada exitosamente.',
             });
             if (onSave) onSave();
-            else router.push(`/entry/${entry.id}`);
-            
             router.refresh();
 
         } else {
@@ -118,7 +130,23 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               createdAt: Timestamp.now(),
             };
             
-            const docRef = await addDoc(entriesCollection, newEntry);
+            addDoc(entriesCollection, newEntry).catch(error => {
+                console.error("Error creating entry:", error);
+                if (error.code === 'permission-denied') {
+                    const permissionError = new FirestorePermissionError({
+                        path: entriesCollection.path,
+                        operation: 'create',
+                        requestResourceData: newEntry,
+                    });
+                    errorEmitter.emit('permission-error', permissionError);
+                } else {
+                   toast({
+                    variant: 'destructive',
+                    title: 'Error al crear',
+                    description: error.message || 'No se pudo guardar la entrada.',
+                    });
+                }
+            });
             
             toast({
               title: 'Entrada creada',
@@ -127,26 +155,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             if (onSave) onSave();
             else router.push(`/`);
         }
-      } catch (error: any) {
-        console.error("Error saving entry:", error);
-
-        if (error.code === 'permission-denied') {
-            const path = isEditing ? `users/${user.uid}/journalEntries/${entry.id}` : `users/${user.uid}/journalEntries`;
-            const operation = isEditing ? 'update' : 'create';
-            const permissionError = new FirestorePermissionError({
-                path: path,
-                operation: operation,
-                requestResourceData: data,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-        } else {
-           toast({
-            variant: 'destructive',
-            title: 'Error al guardar',
-            description: error.message || 'No se pudo guardar la entrada. Revisa la consola para más detalles.',
-            });
-        }
-      }
     });
   };
 
