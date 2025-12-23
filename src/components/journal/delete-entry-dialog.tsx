@@ -45,12 +45,11 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
           description: 'Tu entrada ha sido eliminada exitosamente.',
         });
         setOpen(false);
-        // Refresh the current page to reflect the deletion
-        router.refresh(); 
-        // If on the detail page, navigate back to dashboard
-        if (window.location.pathname.includes('/entry/')) {
+        // If on the detail page, navigate back to dashboard after deletion
+        if (window.location.pathname.includes(`/entry/${entryId}`)) {
             router.push('/');
         }
+        // No need to call router.refresh() here because onSnapshot from useCollection will update the UI
       } catch (error: any) {
         console.error("Error deleting entry:", error);
         toast({
@@ -63,18 +62,12 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
   };
 
   const handleTriggerClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
+    e.stopPropagation(); // Prevents the dropdown from closing
     setOpen(true);
-  }
-  
-  const handleOpenChange = (isOpen: boolean) => {
-    // This function now controls the dialog's state
-    setOpen(isOpen);
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild onClick={handleTriggerClick}>
         {children}
       </AlertDialogTrigger>

@@ -17,17 +17,19 @@ interface JournalCardMenuProps {
 }
 
 export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
-    const [dialogOpen, setDialogOpen] = useState(false);
 
     const handleMenuClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
     }
+    
+    // The dialog's open state is managed internally by DeleteEntryDialog
+    // so we don't need to manage it here anymore.
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={handleMenuClick}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={(e) => e.stopPropagation()}>
                     <MoreHorizontal className="h-4 w-4" />
                     <span className="sr-only">Abrir menú</span>
                 </Button>
@@ -41,7 +43,7 @@ export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                  <DeleteEntryDialog entryId={entryId}>
-                    <button className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-left text-destructive">
+                    <button className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-left text-destructive hover:bg-accent">
                         <Trash2 className="mr-2 h-4 w-4" />
                         <span>Eliminar</span>
                     </button>
