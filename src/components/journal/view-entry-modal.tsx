@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
-import { Edit, Trash2, Download } from 'lucide-react';
+import { Edit, Trash2 } from 'lucide-react';
 import { DeleteEntryDialog } from './delete-entry-dialog';
 import DownloadPdfButton from './DownloadPdfButton';
 
@@ -24,13 +24,14 @@ interface ViewEntryModalProps {
 
 export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: ViewEntryModalProps) {
   if (!entry) return null;
+  const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl sm:text-3xl font-headline font-bold text-foreground">
-            {entry.bibleVerse}
+            {fullBibleVerse}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
@@ -82,7 +83,7 @@ export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: Vi
 
         <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
           <div className="flex w-full justify-end gap-2">
-             <DownloadPdfButton entry={entry} />
+            <DownloadPdfButton entry={entry} />
             <Button variant="outline" onClick={onEdit}>
                 <Edit className="mr-2 h-4 w-4" />
                 Editar

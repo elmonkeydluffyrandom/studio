@@ -31,7 +31,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         addBulkEntriesToPdf(doc, entries);
     }
     
-    const fileName = entry ? `${entry.bibleVerse.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
+    const fullBibleVerse = entry?.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry?.bibleVerse;
+    const fileName = entry ? `${fullBibleVerse?.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
     doc.save(fileName);
   };
 
@@ -49,7 +50,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     doc.setFont('times', 'bold');
     doc.setFontSize(22);
     doc.setTextColor('#ffffff');
-    doc.text(entry.bibleVerse || 'Entrada Sin Título', pageWidth / 2, 20, { align: 'center' });
+    const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+    doc.text(fullBibleVerse || 'Entrada Sin Título', pageWidth / 2, 20, { align: 'center' });
 
     // Date
     doc.setFontSize(12);
@@ -133,7 +135,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     doc.setFont('times', 'bold');
     doc.setFontSize(16);
     doc.setTextColor(headerColor);
-    doc.text(entry.bibleVerse, margin, y);
+    const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+    doc.text(fullBibleVerse, margin, y);
     y += 8;
 
     const getDate = (date: Date | Timestamp) => {
@@ -183,27 +186,17 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     return y;
   }
 
-  const buttonContent = entry 
-    ? (
-      <Button
-        onClick={handleDownload}
-        variant="outline"
-        size="icon"
-        className="no-print fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg border-2 z-50 bg-background/80 backdrop-blur-sm"
-        aria-label="Descargar entrada como PDF"
-      >
-        <Download className="h-6 w-6" />
-      </Button>
-    ) : (
-      <Button
-        onClick={handleDownload}
-        variant="outline"
-        disabled={!entries || entries.length === 0}
-      >
-        <Download className="mr-2 h-4 w-4" />
-        Exportar PDF
-      </Button>
-    );
+  const buttonContent = (
+    <Button
+      onClick={handleDownload}
+      variant="outline"
+      disabled={!entry && (!entries || entries.length === 0)}
+      aria-label="Descargar entrada como PDF"
+    >
+      <Download className="mr-2 h-4 w-4" />
+      Descargar
+    </Button>
+  );
 
   return buttonContent;
 }

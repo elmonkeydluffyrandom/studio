@@ -81,6 +81,7 @@ export default function EntryDetailPage() {
               </p>
             </div>
             <div className="flex gap-2 self-start sm:self-center">
+              <DownloadPdfButton entry={entry} />
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                   <Edit className="mr-2 h-4 w-4" />
                   Editar
@@ -137,7 +138,6 @@ export default function EntryDetailPage() {
             </div>
           )}
         </div>
-        <DownloadPdfButton entry={entry} />
       </div>
       
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
