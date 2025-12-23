@@ -13,7 +13,6 @@ import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import JournalForm from '@/components/journal/journal-form';
 import { ViewEntryModal } from '@/components/journal/view-entry-modal';
-import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -136,7 +135,6 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">Tus reflexiones recientes.</p>
         </div>
         <div className='flex gap-2'>
-          <DownloadPdfButton entries={entries ?? undefined} />
           <Button onClick={() => setIsCreating(true)}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Nueva Entrada
