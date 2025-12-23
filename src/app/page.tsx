@@ -25,8 +25,16 @@ export default function DashboardPage() {
   const { data: entries, isLoading: areEntriesLoading } = useCollection<JournalEntry>(entriesRef);
 
   const [searchTerm, setSearchTerm] = useState('');
-  
+  const [openBooks, setOpenBooks] = useState<Record<string, boolean>>({});
+
   const isLoading = areEntriesLoading || isUserLoading;
+
+  const toggleBook = (book: string) => {
+    setOpenBooks(prev => ({
+        ...prev,
+        [book]: !prev[book]
+    }));
+  };
 
   const groupedAndFilteredEntries = useMemo(() => {
     if (!entries) return {};
@@ -40,7 +48,7 @@ export default function DashboardPage() {
             entry.teaching.toLowerCase().includes(term) ||
             entry.practicalApplication.toLowerCase().includes(term) ||
             (entry.tagIds && entry.tagIds.some(tag => tag.toLowerCase().includes(term))) ||
-            entry.bibleBook.toLowerCase().includes(term)
+            (entry.bibleBook && entry.bibleBook.toLowerCase().includes(term))
         );
     });
 
@@ -64,7 +72,23 @@ export default function DashboardPage() {
 
     const sortedGroupedEntries: Record<string, JournalEntry[]> = {};
     for (const key of sortedGroupKeys) {
-        sortedGroupedEntries[key] = grouped[key];
+        // Sort entries within each book by chapter and verse
+        const sortedEntries = grouped[key].sort((a, b) => {
+            const getVerseParts = (verse: string) => {
+                const parts = verse.replace(a.bibleBook || '', '').trim().split(/[:\-,]/);
+                return {
+                    chapter: parseInt(parts[0], 10) || 0,
+                    verse: parseInt(parts[1], 10) || 0,
+                };
+            };
+            const verseA = getVerseParts(a.bibleVerse);
+            const verseB = getVerseParts(b.bibleVerse);
+            if (verseA.chapter !== verseB.chapter) {
+                return verseA.chapter - verseB.chapter;
+            }
+            return verseA.verse - verseB.verse;
+        });
+        sortedGroupedEntries[key] = sortedEntries;
     }
 
     return sortedGroupedEntries;
@@ -109,7 +133,12 @@ export default function DashboardPage() {
         />
       </div>
 
-      <JournalList groupedEntries={groupedAndFilteredEntries} isLoading={isLoading} />
+      <JournalList 
+        groupedEntries={groupedAndFilteredEntries} 
+        isLoading={isLoading}
+        openBooks={openBooks}
+        toggleBook={toggleBook}
+      />
     </div>
   );
 }
