@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { Separator } from '../ui/separator';
 
 export default function Login() {
   const auth = useAuth();
@@ -15,7 +16,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAuthAction = async (action: 'signUp' | 'signIn') => {
+  const handleAuthAction = async (action: 'signUp' | 'signIn' | 'anonymous') => {
     if (!auth) return;
     setIsSubmitting(true);
 
@@ -26,11 +27,17 @@ export default function Login() {
           title: 'Cuenta Creada',
           description: '¡Bienvenido! Has iniciado sesión.',
         });
-      } else {
+      } else if (action === 'signIn') {
         await signInWithEmailAndPassword(auth, email, password);
         toast({
           title: 'Inicio de Sesión Exitoso',
           description: '¡Bienvenido de nuevo!',
+        });
+      } else if (action === 'anonymous') {
+        await signInAnonymously(auth);
+        toast({
+          title: 'Sesión de Invitado Iniciada',
+          description: 'Puedes empezar a explorar. Tus notas se guardarán temporalmente.',
         });
       }
     } catch (error: any) {
@@ -92,6 +99,20 @@ export default function Login() {
               Crear Cuenta
             </Button>
           </div>
+          <div className="relative">
+            <Separator className="my-2" />
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                O continúa como
+              </span>
+            </div>
+          </div>
+          <Button onClick={() => handleAuthAction('anonymous')} variant="outline" disabled={isSubmitting}>
+            Entrar como Invitado
+          </Button>
         </CardContent>
       </Card>
     </div>

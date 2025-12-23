@@ -11,6 +11,7 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebas
 import Login from '@/components/auth/login';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
+import { Timestamp } from 'firebase/firestore';
 
 // This is a client component, but we fetch initial data and then manage state
 export default function DashboardPage() {
@@ -18,7 +19,7 @@ export default function DashboardPage() {
   const firestore = useFirestore();
 
   const entriesRef = useMemoFirebase(
-    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries'), orderBy('createdAt', 'desc')) : null,
+    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries')) : null,
     [user, firestore]
   );
 
@@ -72,21 +73,11 @@ export default function DashboardPage() {
 
     const sortedGroupedEntries: Record<string, JournalEntry[]> = {};
     for (const key of sortedGroupKeys) {
-        // Sort entries within each book by chapter and verse
+        // Sort entries within each book by creation date (oldest first)
         const sortedEntries = grouped[key].sort((a, b) => {
-            const getVerseParts = (verse: string) => {
-                const parts = verse.replace(a.bibleBook || '', '').trim().split(/[:\-,]/);
-                return {
-                    chapter: parseInt(parts[0], 10) || 0,
-                    verse: parseInt(parts[1], 10) || 0,
-                };
-            };
-            const verseA = getVerseParts(a.bibleVerse);
-            const verseB = getVerseParts(b.bibleVerse);
-            if (verseA.chapter !== verseB.chapter) {
-                return verseA.chapter - verseB.chapter;
-            }
-            return verseA.verse - verseB.verse;
+            const timeA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : new Date(a.createdAt as any).getTime();
+            const timeB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : new Date(b.createdAt as any).getTime();
+            return timeA - timeB;
         });
         sortedGroupedEntries[key] = sortedEntries;
     }
