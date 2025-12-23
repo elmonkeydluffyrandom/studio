@@ -10,7 +10,7 @@ import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import Login from '@/components/auth/login';
 import { collection, query, orderBy } from 'firebase/firestore';
-
+import { BIBLE_BOOKS } from '@/lib/bible-books';
 
 // This is a client component, but we fetch initial data and then manage state
 export default function DashboardPage() {
@@ -28,19 +28,47 @@ export default function DashboardPage() {
   
   const isLoading = areEntriesLoading || isUserLoading;
 
-  const filteredEntries = useMemo(() => {
-    if (!entries) return [];
-    if (!searchTerm) {
-      return entries;
+  const groupedAndFilteredEntries = useMemo(() => {
+    if (!entries) return {};
+
+    const filtered = entries.filter(entry => {
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase();
+        return (
+            entry.bibleVerse.toLowerCase().includes(term) ||
+            entry.observation.toLowerCase().includes(term) ||
+            entry.teaching.toLowerCase().includes(term) ||
+            entry.practicalApplication.toLowerCase().includes(term) ||
+            (entry.tagIds && entry.tagIds.some(tag => tag.toLowerCase().includes(term))) ||
+            entry.bibleBook.toLowerCase().includes(term)
+        );
+    });
+
+    const grouped = filtered.reduce((acc, entry) => {
+        const book = entry.bibleBook || 'Sin libro';
+        if (!acc[book]) {
+            acc[book] = [];
+        }
+        acc[book].push(entry);
+        return acc;
+    }, {} as Record<string, JournalEntry[]>);
+    
+    // Sort groups by canonical book order
+    const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
+        const indexA = BIBLE_BOOKS.indexOf(a);
+        const indexB = BIBLE_BOOKS.indexOf(b);
+        if (indexA === -1) return 1; // Put "Sin libro" at the end
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+    });
+
+    const sortedGroupedEntries: Record<string, JournalEntry[]> = {};
+    for (const key of sortedGroupKeys) {
+        sortedGroupedEntries[key] = grouped[key];
     }
-    return entries.filter(entry =>
-      entry.bibleVerse.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.observation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.teaching.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.practicalApplication.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (entry.tagIds && entry.tagIds.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
-    );
-  }, [entries, searchTerm]);
+
+    return sortedGroupedEntries;
+}, [entries, searchTerm]);
   
   if (isUserLoading) {
      return (
@@ -74,14 +102,14 @@ export default function DashboardPage() {
       <div className="mb-8">
         <Input
           type="search"
-          placeholder="Buscar por cita, palabra clave o etiqueta..."
+          placeholder="Buscar por libro, cita, palabra clave o etiqueta..."
           className="w-full"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      <JournalList entries={filteredEntries || []} isLoading={isLoading} />
+      <JournalList groupedEntries={groupedAndFilteredEntries} isLoading={isLoading} />
     </div>
   );
 }

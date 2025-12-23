@@ -14,6 +14,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -25,9 +32,11 @@ import { useUser, useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { BIBLE_BOOKS } from '@/lib/bible-books';
 
 const FormSchema = z.object({
-  bibleVerse: z.string().min(3, 'La cita bíblica es requerida.'),
+  bibleBook: z.string({ required_error: "Por favor selecciona un libro."}),
+  bibleVerse: z.string().min(1, 'La cita es requerida (ej. 1:1-5).'),
   verseText: z.string().min(10, 'El texto del versículo es requerido.'),
   observation: z.string().min(10, 'La observación es requerida.'),
   teaching: z.string().min(10, 'La enseñanza es requerida.'),
@@ -52,7 +61,8 @@ export default function JournalForm({ entry }: JournalFormProps) {
   const form = useForm<JournalFormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      bibleVerse: entry?.bibleVerse || '',
+      bibleBook: entry?.bibleBook || '',
+      bibleVerse: entry ? entry.bibleVerse.replace(entry.bibleBook, '').trim() : '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
@@ -75,12 +85,19 @@ export default function JournalForm({ entry }: JournalFormProps) {
       try {
         const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
         
+        const completeBibleVerse = `${data.bibleBook} ${data.bibleVerse}`;
+
+        const entryData = {
+          ...data,
+          bibleVerse: completeBibleVerse,
+          tagIds: tags,
+        };
+
         if (isEditing && entry?.id) {
             // Update existing entry
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
             await setDoc(entryRef, {
-                ...data,
-                tagIds: tags,
+                ...entryData,
                 updatedAt: Timestamp.now()
             }, { merge: true });
             
@@ -94,8 +111,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
             // Create new entry
             const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
             const newEntry = {
-              ...data,
-              tagIds: tags,
+              ...entryData,
               createdAt: Timestamp.now(),
             };
             // No await here for offline-first approach, fire and forget
@@ -143,20 +159,46 @@ export default function JournalForm({ entry }: JournalFormProps) {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <FormField
-              control={form.control}
-              name="bibleVerse"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cita Bíblica</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ej: Salmos 23:1" {...field} />
-                  </FormControl>
-                  <FormDescription>Escribe la referencia del versículo que estás estudiando.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-8 sm:space-y-0">
+               <FormField
+                control={form.control}
+                name="bibleBook"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Libro</FormLabel>
+                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona un libro..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {BIBLE_BOOKS.map(book => (
+                          <SelectItem key={book} value={book}>{book}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="bibleVerse"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-1">
+                    <FormLabel>Cita (Capítulo:Versículo)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: 23:1-4" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
 
             <FormField
               control={form.control}

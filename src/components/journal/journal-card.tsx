@@ -5,14 +5,11 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent,
-  CardFooter,
+  CardFooter
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { JournalEntry } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-import Image from 'next/image';
 import { JournalCardMenu } from './journal-card-menu';
 
 interface JournalCardProps {
@@ -20,45 +17,39 @@ interface JournalCardProps {
 }
 
 export default function JournalCard({ entry }: JournalCardProps) {
-  const image = PlaceHolderImages.find(img => img.id === 'journal-card-bg');
+  
+  // Extracts chapter and verse, e.g., "Salmos 23:1" -> "23:1"
+  const verseReference = entry.bibleVerse.split(' ').slice(1).join(' ');
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden transition-all duration-300 ease-in-out hover:shadow-lg hover:border-primary/50">
-       <Link href={`/entry/${entry.id}`} className="group block flex-grow">
-        <CardHeader className="relative h-24 p-0">
-          {image && (
-             <Image 
-                src={image.imageUrl} 
-                alt={image.description}
-                fill
-                style={{ objectFit: 'cover' }}
-                className="opacity-20 group-hover:opacity-30 transition-opacity"
-                data-ai-hint={image.imageHint}
-              />
-          )}
-           <div className="absolute inset-0 p-6 flex flex-col justify-end bg-gradient-to-t from-card to-transparent">
-             <CardTitle className="font-headline text-xl">{entry.bibleVerse}</CardTitle>
-             <CardDescription>{formatDate(entry.createdAt)}</CardDescription>
-           </div>
-           <div className="absolute top-2 right-2">
-            <JournalCardMenu entryId={entry.id} />
-           </div>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <p className="text-sm text-muted-foreground line-clamp-3">
-            {entry.observation}
-          </p>
-        </CardContent>
-      </Link>
-      <CardFooter className="flex-col items-start gap-4 pt-4">
-        <div className="flex flex-wrap gap-2">
-            {entry.tagIds && entry.tagIds.slice(0, 3).map(tag => (
-              <Badge key={tag} variant="secondary">
-                {tag}
-              </Badge>
-            ))}
-        </div>
-      </CardFooter>
-    </Card>
+      <Card className="flex flex-col justify-between overflow-hidden transition-all duration-200 ease-in-out hover:shadow-md hover:border-primary/30">
+        <Link href={`/entry/${entry.id}`} className="group block flex-grow">
+          <CardHeader className="flex-row items-center justify-between p-3 space-y-0">
+            <div>
+              <CardTitle className="font-headline text-base leading-none">
+                {verseReference || entry.bibleVerse}
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                {formatDate(entry.createdAt)}
+              </CardDescription>
+            </div>
+            <div className="flex-shrink-0" onClick={(e) => e.preventDefault()}>
+              <JournalCardMenu entryId={entry.id} />
+            </div>
+          </CardHeader>
+        </Link>
+        
+        {(entry.tagIds && entry.tagIds.length > 0) && (
+          <CardFooter className="p-3 pt-0">
+            <div className="flex flex-wrap gap-1">
+              {entry.tagIds.slice(0, 3).map(tag => (
+                <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0.5">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </CardFooter>
+        )}
+      </Card>
   );
 }

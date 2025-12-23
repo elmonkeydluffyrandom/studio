@@ -2,6 +2,7 @@ import { Timestamp } from "firebase/firestore";
 
 export interface JournalEntry {
   id: string;
+  bibleBook: string;
   bibleVerse: string;
   verseText: string;
   observation: string;

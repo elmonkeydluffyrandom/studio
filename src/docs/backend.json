@@ -10,6 +10,10 @@
           "type": "string",
           "description": "Unique identifier for the JournalEntry entity."
         },
+        "bibleBook": {
+          "type": "string",
+          "description": "The book of the bible for the entry (e.g., Psalms)."
+        },
         "bibleVerse": {
           "type": "string",
           "description": "The bible verse reference for the entry (e.g., Psalms 23)."
@@ -45,6 +49,7 @@
       },
       "required": [
         "id",
+        "bibleBook",
         "bibleVerse",
         "verseText",
         "observation",
