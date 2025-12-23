@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 
-export function DeleteEntryDialog({ entryId, children }: { entryId: string, children: ReactNode }) {
+export function DeleteEntryDialog({ entryId, onDeleted, children }: { entryId: string, onDeleted?: () => void, children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -45,6 +45,8 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
           description: 'Tu entrada ha sido eliminada exitosamente.',
         });
         
+        onDeleted?.();
+        
         // If on the detail page, navigate back to dashboard after deletion
         if (window.location.pathname.includes(`/entry/${entryId}`)) {
             router.push('/');
@@ -65,6 +67,7 @@ export function DeleteEntryDialog({ entryId, children }: { entryId: string, chil
 
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation(); 
+    e.preventDefault();
     setOpen(true);
   }
 

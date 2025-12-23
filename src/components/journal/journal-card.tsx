@@ -33,7 +33,7 @@ export default function JournalCard({ entry }: JournalCardProps) {
                 {formatDate(entry.createdAt)}
               </CardDescription>
             </div>
-            <div className="flex-shrink-0 -mt-1 -mr-1" onClick={(e) => {e.preventDefault(); e.stopPropagation();}}>
+            <div className="flex-shrink-0 -mt-1 -mr-1">
               <JournalCardMenu entryId={entry.id} />
             </div>
           </CardHeader>

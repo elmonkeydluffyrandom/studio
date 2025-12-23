@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button"
 import { MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import Link from "next/link";
 import { DeleteEntryDialog } from "./delete-entry-dialog";
+import { useState } from "react";
 
 interface JournalCardMenuProps {
     entryId: string;
 }
 
 export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     const handleMenuClick = (e: React.MouseEvent) => {
         // Stop propagation to prevent the card's Link from firing
@@ -24,7 +26,7 @@ export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
     }
     
     return (
-        <DropdownMenu>
+        <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={handleMenuClick}>
                     <MoreHorizontal className="h-4 w-4" />
@@ -33,15 +35,14 @@ export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={handleMenuClick}>
                 <DropdownMenuItem asChild>
-                    <Link href={`/entry/${entryId}`}>
+                    <Link href={`/entry/${entryId}/edit`}>
                         <Edit className="mr-2 h-4 w-4" />
-                        <span>Ver/Editar</span>
+                        <span>Editar</span>
                     </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                 <DeleteEntryDialog entryId={entryId}>
-                    <button 
-                        onClick={(e) => e.stopPropagation()} // Prevent dropdown from closing prematurely
+                 <DeleteEntryDialog entryId={entryId} onDeleted={() => setIsMenuOpen(false)}>
+                    <button
                         className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-left text-destructive hover:bg-accent">
                         <Trash2 className="mr-2 h-4 w-4" />
                         <span>Eliminar</span>
