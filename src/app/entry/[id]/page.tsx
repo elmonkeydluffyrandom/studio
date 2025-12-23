@@ -47,7 +47,7 @@ export default function EntryDetailPage() {
   useEffect(() => {
     if (entry) {
       setFormData({
-        bibleBook: entry.bibleBook || '',
+        bibleBook: entry.bibleBook || '', // Defensive check for old entries
         bibleVerse: entry.bibleVerse.replace(entry.bibleBook || '', '').trim(),
         verseText: entry.verseText,
         observation: entry.observation,
@@ -106,7 +106,7 @@ export default function EntryDetailPage() {
   const handleCancel = () => {
     if (entry) {
         setFormData({
-            bibleBook: entry.bibleBook || '',
+            bibleBook: entry.bibleBook || '', // Defensive check
             bibleVerse: entry.bibleVerse.replace(entry.bibleBook || '', '').trim(),
             verseText: entry.verseText,
             observation: entry.observation,
@@ -159,7 +159,7 @@ export default function EntryDetailPage() {
              {isEditing ? (
                  <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-4 sm:space-y-0">
                     <div className='sm:col-span-2'>
-                        <Select onValueChange={handleSelectChange} defaultValue={formData.bibleBook}>
+                        <Select onValueChange={handleSelectChange} defaultValue={formData.bibleBook || ''}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Selecciona un libro..." />
