@@ -65,7 +65,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     resolver: zodResolver(FormSchema),
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
-      chapter: entry?.chapter || undefined,
+      chapter: entry?.chapter || '',
       bibleVerse: entry?.bibleVerse || '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
