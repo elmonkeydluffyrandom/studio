@@ -50,7 +50,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     doc.setFont('times', 'bold');
     doc.setFontSize(22);
     doc.setTextColor('#ffffff');
-    const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+    const fullBibleVerse = entry.bibleVerse;
     doc.text(fullBibleVerse || 'Entrada Sin Título', pageWidth / 2, 20, { align: 'center' });
 
     // Date
@@ -92,8 +92,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     
     addSection("Escritura (S - Scripture)", entry.verseText);
     addSection("Observación (O - Observation)", entry.observation);
-    addSection("Aplicación (A - Application)", entry.teaching);
-    addSection("Oración (P - Prayer)", entry.practicalApplication);
+    addSection("Enseñanza", entry.teaching);
+    addSection("Aplicación Práctica", entry.practicalApplication);
 
     if(entry.tagIds && entry.tagIds.length > 0){
       addSection('Etiquetas', entry.tagIds.join(', '));
@@ -135,7 +135,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     doc.setFont('times', 'bold');
     doc.setFontSize(16);
     doc.setTextColor(headerColor);
-    const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+    const fullBibleVerse = entry.bibleVerse;
     doc.text(fullBibleVerse, margin, y);
     y += 8;
 
@@ -175,7 +175,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     };
     
     addSection('Observación', entry.observation);
-    addSection('Aplicación', entry.teaching);
+    addSection('Enseñanza', entry.teaching);
     
     // --- Separator ---
     doc.setDrawColor('#e2e8f0'); // slate-200

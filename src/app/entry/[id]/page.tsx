@@ -112,14 +112,14 @@ export default function EntryDetailPage() {
           </div>
           
           <div className="print-section">
-            <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación (A - Application)</h2>
+            <h2 className="text-2xl font-headline font-semibold print-section-title">Enseñanza</h2>
             <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
                 {entry.teaching}
             </p>
           </div>
 
           <div className="print-section">
-            <h2 className="text-2xl font-headline font-semibold print-section-title">Oración (P - Prayer)</h2>
+            <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación Práctica</h2>
             <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
                 {entry.practicalApplication}
             </p>

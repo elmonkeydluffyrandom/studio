@@ -66,7 +66,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
       chapter: entry?.chapter || '',
-      bibleVerse: entry?.bibleVerse || '',
+      bibleVerse: entry?.bibleVerse.split(':').pop() || '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
@@ -258,7 +258,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             name="teaching"
             render={({ field }) => (
             <FormItem>
-                <FormLabel>Aplicación (A - Application)</FormLabel>
+                <FormLabel>Enseñanza</FormLabel>
                 <FormControl>
                 <Textarea
                     placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
@@ -276,7 +276,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             name="practicalApplication"
             render={({ field }) => (
             <FormItem>
-                <FormLabel>Oración (P - Prayer)</FormLabel>
+                <FormLabel>Aplicación Práctica</FormLabel>
                 <FormControl>
                 <Textarea
                     placeholder="Escribe una oración basada en tu estudio. Habla con Dios sobre lo que has aprendido."
