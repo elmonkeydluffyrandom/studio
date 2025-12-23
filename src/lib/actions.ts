@@ -31,7 +31,7 @@ export type State = {
 };
 
 export async function deleteEntry(userId: string, id: string) {
-  if (!user) {
+  if (!userId) {
     throw new Error("Usuario no autenticado.");
   }
   

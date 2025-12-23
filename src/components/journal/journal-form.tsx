@@ -120,13 +120,13 @@ export default function JournalForm({ entry }: JournalFormProps) {
                 requestResourceData: data,
             });
             errorEmitter.emit('permission-error', permissionError);
+        } else {
+           toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: error.message || 'No se pudo guardar la entrada. Revisa la consola para más detalles.',
+            });
         }
-
-        toast({
-          variant: 'destructive',
-          title: 'Error al guardar',
-          description: error.message || 'No se pudo guardar la entrada. Revisa la consola para más detalles.',
-        });
       }
     });
   };

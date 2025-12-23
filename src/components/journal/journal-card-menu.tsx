@@ -34,9 +34,9 @@ export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={handleMenuClick}>
                 <DropdownMenuItem asChild>
-                    <Link href={`/entry/${entryId}/edit`}>
+                    <Link href={`/entry/${entryId}`}>
                         <Edit className="mr-2 h-4 w-4" />
-                        <span>Editar</span>
+                        <span>Ver/Editar</span>
                     </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
