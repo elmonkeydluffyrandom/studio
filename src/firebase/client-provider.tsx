@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useMemo, type ReactNode } from 'react';
+import React, { useMemo, type ReactNode, useEffect } from 'react';
 import { FirebaseProvider } from '@/firebase/provider';
 import { initializeFirebase } from '@/firebase';
+import { enableIndexedDbPersistence } from 'firebase/firestore';
 
 interface FirebaseClientProviderProps {
   children: ReactNode;
@@ -10,9 +11,21 @@ interface FirebaseClientProviderProps {
 
 export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
   const firebaseServices = useMemo(() => {
-    // Initialize Firebase on the client side, once per component mount.
     return initializeFirebase();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
+
+  useEffect(() => {
+    if (firebaseServices.firestore) {
+      enableIndexedDbPersistence(firebaseServices.firestore)
+        .catch((err) => {
+          if (err.code == 'failed-precondition') {
+              console.log("Persistencia falló: Múltiples pestañas abiertas.");
+          } else if (err.code == 'unimplemented') {
+              console.log("El navegador no soporta persistencia.");
+          }
+        });
+    }
+  }, [firebaseServices.firestore]);
 
   return (
     <FirebaseProvider
