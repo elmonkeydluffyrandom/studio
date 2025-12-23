@@ -14,6 +14,7 @@ import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Timestamp } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import JournalForm from '@/components/journal/journal-form';
+import { ViewEntryModal } from '@/components/journal/view-entry-modal';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -29,15 +30,25 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [openBooks, setOpenBooks] = useState<Record<string, boolean>>({});
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   const isLoading = areEntriesLoading || isUserLoading;
 
   const handleEdit = (entry: JournalEntry) => {
+    setViewingEntry(null);
     setEditingEntry(entry);
   };
 
-  const handleCloseModal = () => {
+  const handleView = (entry: JournalEntry) => {
+    setViewingEntry(entry);
+  };
+
+  const handleCloseView = () => {
+    setViewingEntry(null);
+  };
+
+  const handleCloseEdit = () => {
     setEditingEntry(null);
     setIsCreating(false);
   };
@@ -134,16 +145,26 @@ export default function DashboardPage() {
         openBooks={openBooks}
         toggleBook={toggleBook}
         onEdit={handleEdit}
+        onView={handleView}
       />
+      
+      {viewingEntry && (
+        <ViewEntryModal
+          entry={viewingEntry}
+          onClose={handleCloseView}
+          onEdit={() => handleEdit(viewingEntry)}
+          onDeleteCompleted={handleCloseView}
+        />
+      )}
 
-      <Dialog open={!!editingEntry || isCreating} onOpenChange={(open) => !open && handleCloseModal()}>
+      <Dialog open={!!editingEntry || isCreating} onOpenChange={(open) => !open && handleCloseEdit()}>
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader>
             <DialogTitle>{editingEntry ? 'Editar Entrada' : 'Nueva Entrada'}</DialogTitle>
           </DialogHeader>
             <JournalForm 
               entry={editingEntry ?? undefined} 
-              onSave={handleCloseModal}
+              onSave={handleCloseEdit}
               isModal={true}
             />
         </DialogContent>

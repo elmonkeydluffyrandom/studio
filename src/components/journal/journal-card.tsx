@@ -1,5 +1,4 @@
 'use client';
-import Link from 'next/link';
 import {
   Card,
   CardHeader,
@@ -15,15 +14,23 @@ import { JournalCardMenu } from './journal-card-menu';
 interface JournalCardProps {
   entry: JournalEntry;
   onEdit: (entry: JournalEntry) => void;
+  onView: (entry: JournalEntry) => void;
 }
 
-export default function JournalCard({ entry, onEdit }: JournalCardProps) {
+export default function JournalCard({ entry, onEdit, onView }: JournalCardProps) {
   
   const verseReference = entry.bibleVerse.replace(entry.bibleBook || '', '').trim();
 
+  const handleCardClick = () => {
+    onView(entry);
+  }
+
   return (
-      <Card className="flex flex-col justify-between overflow-hidden transition-all duration-200 ease-in-out hover:shadow-md hover:border-primary/30">
-        <Link href={`/entry/${entry.id}`} className="group block flex-grow">
+      <div 
+        className="group relative flex flex-col justify-between overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition-all duration-200 ease-in-out hover:shadow-md hover:border-primary/30 cursor-pointer"
+        onClick={handleCardClick}
+      >
+        <Card className="flex-grow border-0 shadow-none bg-transparent">
           <CardHeader className="flex-row items-start justify-between p-3 space-y-0">
             <div className='flex-1'>
               <CardTitle className="font-headline text-base leading-tight font-bold">
@@ -34,7 +41,8 @@ export default function JournalCard({ entry, onEdit }: JournalCardProps) {
               </CardDescription>
             </div>
           </CardHeader>
-        </Link>
+        </Card>
+
         <div className="absolute top-1 right-1">
             <JournalCardMenu entryId={entry.id} onEdit={() => onEdit(entry)} />
         </div>
@@ -50,6 +58,6 @@ export default function JournalCard({ entry, onEdit }: JournalCardProps) {
             </div>
           </CardFooter>
         )}
-      </Card>
+      </div>
   );
 }
