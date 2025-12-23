@@ -1,5 +1,5 @@
 'use client';
-import { notFound, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -15,6 +15,9 @@ import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { BIBLE_BOOKS } from '@/lib/bible-books';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FormControl } from '@/components/ui/form';
 
 export default function EntryDetailPage() {
   const { id } = useParams();
@@ -32,6 +35,7 @@ export default function EntryDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
+    bibleBook: '',
     bibleVerse: '',
     verseText: '',
     observation: '',
@@ -43,7 +47,8 @@ export default function EntryDetailPage() {
   useEffect(() => {
     if (entry) {
       setFormData({
-        bibleVerse: entry.bibleVerse,
+        bibleBook: entry.bibleBook || '',
+        bibleVerse: entry.bibleVerse.replace(entry.bibleBook || '', '').trim(),
         verseText: entry.verseText,
         observation: entry.observation,
         teaching: entry.teaching,
@@ -56,17 +61,23 @@ export default function EntryDetailPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({...prev, [name]: value}));
+  };
+
+  const handleSelectChange = (value: string) => {
+    setFormData(prev => ({...prev, bibleBook: value}));
   }
 
   const handleUpdate = async () => {
     if (!user || !firestore || !entry) return;
 
     const tags = formData.tagIds.split(',').map(tag => tag.trim()).filter(tag => tag);
+    const completeBibleVerse = `${formData.bibleBook} ${formData.bibleVerse}`;
 
     try {
       const entryToUpdate = {
         ...entry,
-        bibleVerse: formData.bibleVerse,
+        bibleBook: formData.bibleBook,
+        bibleVerse: completeBibleVerse,
         verseText: formData.verseText,
         observation: formData.observation,
         teaching: formData.teaching,
@@ -95,7 +106,8 @@ export default function EntryDetailPage() {
   const handleCancel = () => {
     if (entry) {
         setFormData({
-            bibleVerse: entry.bibleVerse,
+            bibleBook: entry.bibleBook || '',
+            bibleVerse: entry.bibleVerse.replace(entry.bibleBook || '', '').trim(),
             verseText: entry.verseText,
             observation: entry.observation,
             teaching: entry.teaching,
@@ -145,13 +157,29 @@ export default function EntryDetailPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
           <div>
              {isEditing ? (
-                 <Input 
-                    name="bibleVerse"
-                    value={formData.bibleVerse}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Salmos 23:1"
-                    className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0"
-                 />
+                 <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-4 sm:space-y-0">
+                    <div className='sm:col-span-2'>
+                        <Select onValueChange={handleSelectChange} defaultValue={formData.bibleBook}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona un libro..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {BIBLE_BOOKS.map(book => (
+                              <SelectItem key={book} value={book}>{book}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                    </div>
+                    <Input 
+                        name="bibleVerse"
+                        value={formData.bibleVerse}
+                        onChange={handleInputChange}
+                        placeholder="Ej: 23:1-4"
+                        className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0"
+                    />
+                 </div>
             ) : (
                 <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
 
@@ -258,7 +286,7 @@ export default function EntryDetailPage() {
           )}
         </div>
 
-        {entry.tagIds && entry.tagIds.length > 0 && (
+        { (isEditing || (entry.tagIds && entry.tagIds.length > 0)) && (
           <div className="print-section print-tags">
             <h3 className="text-lg font-headline font-semibold print-section-title">Etiquetas</h3>
             {isEditing ? (
@@ -271,7 +299,7 @@ export default function EntryDetailPage() {
                  />
             ) : (
                 <div className="mt-2 flex flex-wrap gap-2">
-                {entry.tagIds.map(tag => (
+                {entry.tagIds?.map(tag => (
                     <Badge key={tag} variant="secondary" className="print-tag">
                     {tag}
                     </Badge>
