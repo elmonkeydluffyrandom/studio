@@ -19,7 +19,7 @@ interface JournalCardProps {
 
 export default function JournalCard({ entry, onEdit, onView }: JournalCardProps) {
   
-  const verseReference = entry.bibleVerse.replace(entry.bibleBook || '', '').trim();
+  const verseReference = `${entry.chapter}:${entry.bibleVerse}`;
 
   const handleCardClick = () => {
     onView(entry);
@@ -34,7 +34,7 @@ export default function JournalCard({ entry, onEdit, onView }: JournalCardProps)
           <CardHeader className="flex-row items-start justify-between p-3 space-y-0">
             <div className='flex-1'>
               <CardTitle className="font-headline text-base leading-tight font-bold">
-                {verseReference || entry.bibleVerse}
+                {verseReference}
               </CardTitle>
               <CardDescription className="text-xs mt-1">
                 {formatDate(entry.createdAt)}

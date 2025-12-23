@@ -14,6 +14,10 @@
           "type": "string",
           "description": "The book of the bible for the entry (e.g., Psalms)."
         },
+        "chapter": {
+          "type": "number",
+          "description": "The chapter of the bible for the entry."
+        },
         "bibleVerse": {
           "type": "string",
           "description": "The bible verse reference for the entry (e.g., Psalms 23)."
@@ -50,6 +54,7 @@
       "required": [
         "id",
         "bibleBook",
+        "chapter",
         "bibleVerse",
         "verseText",
         "observation",

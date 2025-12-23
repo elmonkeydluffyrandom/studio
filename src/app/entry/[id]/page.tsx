@@ -60,6 +60,9 @@ export default function EntryDetailPage() {
     setIsEditing(false);
   };
 
+  const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+
+
   return (
     <>
       <div className="container mx-auto max-w-4xl print-container">
@@ -72,7 +75,7 @@ export default function EntryDetailPage() {
           </Button>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
             <div>
-              <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
+              <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{fullBibleVerse}</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
               </p>

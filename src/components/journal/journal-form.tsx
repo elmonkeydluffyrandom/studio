@@ -36,7 +36,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 
 const FormSchema = z.object({
   bibleBook: z.string({ required_error: "Por favor selecciona un libro."}).min(1, 'El libro es requerido.'),
-  bibleVerse: z.string().min(1, 'La cita es requerida (ej. 1:1-5).'),
+  chapter: z.coerce.number().min(1, 'El capítulo es requerido.'),
+  bibleVerse: z.string().min(1, 'La cita es requerida (ej. 1-5).'),
   verseText: z.string().min(10, 'El texto del versículo es requerido.'),
   observation: z.string().min(10, 'La observación es requerida.'),
   teaching: z.string().min(10, 'La enseñanza es requerida.'),
@@ -64,7 +65,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     resolver: zodResolver(FormSchema),
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
-      bibleVerse: entry ? (entry.bibleVerse || '').replace(entry.bibleBook || '', '').trim() : '',
+      chapter: entry?.chapter || undefined,
+      bibleVerse: entry?.bibleVerse || '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
@@ -85,11 +87,11 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
     startTransition(() => {
         const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
-        const completeBibleVerse = `${data.bibleBook} ${data.bibleVerse}`;
+        const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
 
         const entryData = {
           ...data,
-          bibleVerse: completeBibleVerse,
+          bibleVerse: fullBibleVerse, // We're saving the full constructed verse
           tagIds: tags,
         };
 
@@ -162,12 +164,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
-        <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-6 sm:space-y-0">
+        <div className="grid grid-cols-1 sm:grid-cols-6 sm:gap-4 space-y-6 sm:space-y-0">
             <FormField
             control={form.control}
             name="bibleBook"
             render={({ field }) => (
-                <FormItem className="sm:col-span-2">
+                <FormItem className="sm:col-span-3">
                 <FormLabel>Libro</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
                     <FormControl>
@@ -188,12 +190,26 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
             <FormField
             control={form.control}
-            name="bibleVerse"
+            name="chapter"
             render={({ field }) => (
                 <FormItem className="sm:col-span-1">
-                <FormLabel>Cita (Cap:Ver)</FormLabel>
+                <FormLabel>Capítulo</FormLabel>
                 <FormControl>
-                    <Input placeholder="Ej: 23:1-4" {...field} />
+                    <Input type="number" placeholder="Ej: 23" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            
+            <FormField
+            control={form.control}
+            name="bibleVerse"
+            render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                <FormLabel>Versículos</FormLabel>
+                <FormControl>
+                    <Input placeholder="Ej: 1-4" {...field} />
                 </FormControl>
                 <FormMessage />
                 </FormItem>

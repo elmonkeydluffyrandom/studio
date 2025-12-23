@@ -13,7 +13,6 @@ import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import JournalForm from '@/components/journal/journal-form';
 import { ViewEntryModal } from '@/components/journal/view-entry-modal';
-import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -84,18 +83,10 @@ export default function DashboardPage() {
         return acc;
     }, {} as Record<string, JournalEntry[]>);
     
-    const getTime = (date: any): number => {
-        if (!date) return 0;
-        if (typeof date.toMillis === 'function') return date.toMillis(); // Firebase Timestamp
-        if (date.seconds) return date.seconds * 1000; // Raw object from Firebase
-        return new Date(date).getTime(); // JS Date or string
-    };
 
-    // Explicitly sort entries within each book group by creation date (asc)
+    // Explicitly sort entries within each book group by chapter (asc)
     for (const book in grouped) {
-      grouped[book].sort((a, b) => {
-        return getTime(a.createdAt) - getTime(b.createdAt);
-      });
+      grouped[book].sort((a, b) => (a.chapter || 0) - (b.chapter || 0));
     }
 
     const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
