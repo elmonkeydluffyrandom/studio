@@ -84,9 +84,11 @@ export default function DashboardPage() {
     }, {} as Record<string, JournalEntry[]>);
     
 
-    // Explicitly sort entries within each book group by chapter (asc)
+    // Sort entries within each book group using natural sort on bibleVerse.
     for (const book in grouped) {
-      grouped[book].sort((a, b) => (a.chapter || 0) - (b.chapter || 0));
+      grouped[book].sort((a, b) => {
+        return a.bibleVerse.localeCompare(b.bibleVerse, undefined, { numeric: true, sensitivity: 'base' });
+      });
     }
 
     const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
