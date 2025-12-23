@@ -19,7 +19,8 @@ interface JournalCardProps {
 
 export default function JournalCard({ entry, onEdit, onView }: JournalCardProps) {
   
-  const verseReference = `${entry.chapter}:${entry.bibleVerse}`;
+  const verseReference = entry.chapter ? `${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+
 
   const handleCardClick = () => {
     onView(entry);
