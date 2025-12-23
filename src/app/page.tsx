@@ -9,7 +9,7 @@ import JournalList from '@/components/journal/journal-list';
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import Login from '@/components/auth/login';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Timestamp } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const firestore = useFirestore();
 
   const entriesRef = useMemoFirebase(
-    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries')) : null,
+    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries'), orderBy('createdAt', 'asc')) : null,
     [user, firestore]
   );
 
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [openBooks, setOpenBooks] = useState<Record<string, boolean>>({});
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const isLoading = areEntriesLoading || isUserLoading;
 
@@ -38,6 +39,7 @@ export default function DashboardPage() {
 
   const handleCloseModal = () => {
     setEditingEntry(null);
+    setIsCreating(false);
   };
 
   const toggleBook = (book: string) => {
@@ -82,12 +84,8 @@ export default function DashboardPage() {
 
     const sortedGroupedEntries: Record<string, JournalEntry[]> = {};
     for (const key of sortedGroupKeys) {
-        const sortedEntries = grouped[key].sort((a, b) => {
-            const timeA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : new Date(a.createdAt as any).getTime();
-            const timeB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : new Date(b.createdAt as any).getTime();
-            return timeA - timeB;
-        });
-        sortedGroupedEntries[key] = sortedEntries;
+        // The sorting by createdAt is now handled by the Firestore query
+        sortedGroupedEntries[key] = grouped[key];
     }
 
     return sortedGroupedEntries;
@@ -114,11 +112,9 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-headline font-bold text-foreground">Diario Bíblico</h1>
           <p className="text-muted-foreground">Tus reflexiones recientes.</p>
         </div>
-        <Button asChild>
-          <Link href="/new">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Nueva Entrada
-          </Link>
+        <Button onClick={() => setIsCreating(true)}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Nueva Entrada
         </Button>
       </div>
 
@@ -140,14 +136,16 @@ export default function DashboardPage() {
         onEdit={handleEdit}
       />
 
-      <Dialog open={!!editingEntry} onOpenChange={(open) => !open && handleCloseModal()}>
+      <Dialog open={!!editingEntry || isCreating} onOpenChange={(open) => !open && handleCloseModal()}>
         <DialogContent className="sm:max-w-[625px]">
           <DialogHeader>
-            <DialogTitle>Editar Entrada</DialogTitle>
+            <DialogTitle>{editingEntry ? 'Editar Entrada' : 'Nueva Entrada'}</DialogTitle>
           </DialogHeader>
-          {editingEntry && (
-            <JournalForm entry={editingEntry} onSave={handleCloseModal} />
-          )}
+            <JournalForm 
+              entry={editingEntry ?? undefined} 
+              onSave={handleCloseModal}
+              isModal={true}
+            />
         </DialogContent>
       </Dialog>
 
