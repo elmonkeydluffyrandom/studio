@@ -24,7 +24,7 @@ interface ViewEntryModalProps {
 
 export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: ViewEntryModalProps) {
   if (!entry) return null;
-  const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+  const fullBibleVerse = entry.bibleVerse;
 
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>

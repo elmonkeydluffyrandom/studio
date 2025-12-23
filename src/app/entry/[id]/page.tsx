@@ -60,7 +60,7 @@ export default function EntryDetailPage() {
     setIsEditing(false);
   };
 
-  const fullBibleVerse = entry.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry.bibleVerse;
+  const fullBibleVerse = entry.bibleVerse;
 
 
   return (
