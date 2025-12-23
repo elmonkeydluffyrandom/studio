@@ -9,9 +9,10 @@ interface JournalListProps {
   isLoading: boolean;
   openBooks: Record<string, boolean>;
   toggleBook: (book: string) => void;
+  onEdit: (entry: JournalEntry) => void;
 }
 
-export default function JournalList({ groupedEntries, isLoading, openBooks, toggleBook }: JournalListProps) {
+export default function JournalList({ groupedEntries, isLoading, openBooks, toggleBook, onEdit }: JournalListProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -60,7 +61,7 @@ export default function JournalList({ groupedEntries, isLoading, openBooks, togg
           <CollapsibleContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 pl-8 border-l-2 ml-6">
               {entries.map(entry => (
-                <JournalCard key={entry.id} entry={entry} />
+                <JournalCard key={entry.id} entry={entry} onEdit={onEdit} />
               ))}
             </div>
           </CollapsibleContent>

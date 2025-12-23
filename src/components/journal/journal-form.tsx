@@ -24,7 +24,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
@@ -33,6 +32,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 const FormSchema = z.object({
   bibleBook: z.string({ required_error: "Por favor selecciona un libro."}).min(1, 'El libro es requerido.'),
@@ -48,9 +48,11 @@ type JournalFormValues = z.infer<typeof FormSchema>;
 
 interface JournalFormProps {
   entry?: JournalEntry;
+  onSave?: () => void;
+  isModal?: boolean;
 }
 
-export default function JournalForm({ entry }: JournalFormProps) {
+export default function JournalForm({ entry, onSave, isModal = false }: JournalFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -62,7 +64,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
-      bibleVerse: entry ? entry.bibleVerse.replace(entry.bibleBook || '', '').trim() : '',
+      bibleVerse: entry ? (entry.bibleVerse || '').replace(entry.bibleBook || '', '').trim() : '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
@@ -94,7 +96,6 @@ export default function JournalForm({ entry }: JournalFormProps) {
         };
 
         if (isEditing && entry?.id) {
-            // Update existing entry
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
             await setDoc(entryRef, {
                 ...entryData,
@@ -105,24 +106,26 @@ export default function JournalForm({ entry }: JournalFormProps) {
               title: 'Entrada actualizada',
               description: 'Tu entrada ha sido guardada exitosamente.',
             });
-            router.push(`/entry/${entry.id}`);
+            if (onSave) onSave();
+            else router.push(`/entry/${entry.id}`);
+            
             router.refresh();
 
         } else {
-            // Create new entry
             const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
             const newEntry = {
               ...entryData,
               createdAt: Timestamp.now(),
             };
             
-            await addDoc(entriesCollection, newEntry);
+            const docRef = await addDoc(entriesCollection, newEntry);
             
             toast({
               title: 'Entrada creada',
               description: 'Tu nueva entrada ha sido guardada.',
             });
-            router.push(`/`);
+            if (onSave) onSave();
+            else router.push(`/`);
         }
       } catch (error: any) {
         console.error("Error saving entry:", error);
@@ -147,6 +150,158 @@ export default function JournalForm({ entry }: JournalFormProps) {
     });
   };
 
+  const formContent = (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-6 sm:space-y-0">
+            <FormField
+            control={form.control}
+            name="bibleBook"
+            render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                <FormLabel>Libro</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                    <FormControl>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un libro..." />
+                    </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                    {BIBLE_BOOKS.map(book => (
+                        <SelectItem key={book} value={book}>{book}</SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
+            <FormField
+            control={form.control}
+            name="bibleVerse"
+            render={({ field }) => (
+                <FormItem className="sm:col-span-1">
+                <FormLabel>Cita (Cap:Ver)</FormLabel>
+                <FormControl>
+                    <Input placeholder="Ej: 23:1-4" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        </div>
+
+        <FormField
+            control={form.control}
+            name="verseText"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Texto del Versículo (S - Scripture)</FormLabel>
+                <FormControl>
+                <Textarea
+                    placeholder="Escribe aquí el texto del versículo..."
+                    className="min-h-[100px] font-serif"
+                    {...field}
+                />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+
+        <FormField
+            control={form.control}
+            name="observation"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Observación (O - Observation)</FormLabel>
+                <FormControl>
+                <Textarea
+                    placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
+                    className="min-h-[120px]"
+                    {...field}
+                />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        
+        <FormField
+            control={form.control}
+            name="teaching"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Aplicación (A - Application)</FormLabel>
+                <FormControl>
+                <Textarea
+                    placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
+                    className="min-h-[120px]"
+                    {...field}
+                />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        
+        <FormField
+            control={form.control}
+            name="practicalApplication"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Oración (P - Prayer)</FormLabel>
+                <FormControl>
+                <Textarea
+                    placeholder="Escribe una oración basada en tu estudio. Habla con Dios sobre lo que has aprendido."
+                    className="min-h-[120px]"
+                    {...field}
+                />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        
+        <FormField
+            control={form.control}
+            name="tagIds"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Etiquetas</FormLabel>
+                <FormControl>
+                <Input placeholder="Ej: Oración, Familia, Fe" {...field} />
+                </FormControl>
+                <FormDescription>Separa las etiquetas con comas.</FormDescription>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        <div className="flex justify-end gap-2">
+            {isModal ? (
+                <Button type="button" variant="outline" onClick={onSave}>
+                    Cancelar
+                </Button>
+            ) : (
+                <Button type="button" variant="outline" onClick={() => router.back()}>
+                    Cancelar
+                </Button>
+            )}
+            <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
+            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
+            </Button>
+        </div>
+      </form>
+    </Form>
+  );
+
+  if (isModal) {
+    return <div className="max-h-[80vh] overflow-y-auto p-1 pr-4">{formContent}</div>;
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -156,146 +311,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-8 sm:space-y-0">
-               <FormField
-                control={form.control}
-                name="bibleBook"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Libro</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un libro..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {BIBLE_BOOKS.map(book => (
-                          <SelectItem key={book} value={book}>{book}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="bibleVerse"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-1">
-                    <FormLabel>Cita (Capítulo:Versículo)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: 23:1-4" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-
-            <FormField
-              control={form.control}
-              name="verseText"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Texto del Versículo (S - Scripture)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Escribe aquí el texto del versículo..."
-                      className="min-h-[120px] font-serif"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="observation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observación (O - Observation)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
-                      className="min-h-[150px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="teaching"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Aplicación (A - Application)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
-                      className="min-h-[150px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="practicalApplication"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Oración (P - Prayer)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Escribe una oración basada en tu estudio. Habla con Dios sobre lo que has aprendido."
-                      className="min-h-[150px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="tagIds"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Etiquetas</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ej: Oración, Familia, Fe" {...field} />
-                  </FormControl>
-                  <FormDescription>Separa las etiquetas con comas.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => router.back()}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
-              </Button>
-            </div>
-          </form>
-        </Form>
+        {formContent}
       </CardContent>
     </Card>
   );

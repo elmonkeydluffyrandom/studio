@@ -14,11 +14,11 @@ import { JournalCardMenu } from './journal-card-menu';
 
 interface JournalCardProps {
   entry: JournalEntry;
+  onEdit: (entry: JournalEntry) => void;
 }
 
-export default function JournalCard({ entry }: JournalCardProps) {
+export default function JournalCard({ entry, onEdit }: JournalCardProps) {
   
-  // Extracts chapter and verse, e.g., "Salmos 23:1" -> "23:1"
   const verseReference = entry.bibleVerse.replace(entry.bibleBook || '', '').trim();
 
   return (
@@ -33,11 +33,11 @@ export default function JournalCard({ entry }: JournalCardProps) {
                 {formatDate(entry.createdAt)}
               </CardDescription>
             </div>
-            <div className="flex-shrink-0 -mt-1 -mr-1">
-              <JournalCardMenu entryId={entry.id} />
-            </div>
           </CardHeader>
         </Link>
+        <div className="absolute top-1 right-1">
+            <JournalCardMenu entryId={entry.id} onEdit={() => onEdit(entry)} />
+        </div>
         
         {(entry.tagIds && entry.tagIds.length > 0) && (
           <CardFooter className="p-3 pt-0">

@@ -1,22 +1,28 @@
 'use client';
 import { Button } from "@/components/ui/button"
 import { MoreHorizontal, Edit, Trash2 } from "lucide-react"
-import Link from "next/link";
 import { DeleteEntryDialog } from "./delete-entry-dialog";
 import { useState } from "react";
 
 interface JournalCardMenuProps {
     entryId: string;
+    onEdit: () => void;
 }
 
-export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
+export function JournalCardMenu({ entryId, onEdit }: JournalCardMenuProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     const handleMenuClick = (e: React.MouseEvent) => {
-        // Stop propagation to prevent the card's Link from firing
         e.stopPropagation();
         e.preventDefault();
         setIsMenuOpen(!isMenuOpen);
+    }
+    
+    const handleEditClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onEdit();
+        setIsMenuOpen(false);
     }
     
     return (
@@ -42,14 +48,13 @@ export function JournalCardMenu({ entryId }: JournalCardMenuProps) {
                         className="absolute right-0 top-full mt-2 w-48 rounded-md shadow-lg bg-popover border text-popover-foreground z-20 p-1"
                         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside menu
                     >
-                        <Link 
-                            href={`/entry/${entryId}/edit`} 
+                        <button
+                            onClick={handleEditClick}
                             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => setIsMenuOpen(false)}
                         >
                             <Edit className="mr-2 h-4 w-4" />
                             <span>Editar</span>
-                        </Link>
+                        </button>
                         
                         <div className="my-1 h-px bg-muted"></div>
 

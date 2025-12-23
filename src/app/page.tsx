@@ -9,11 +9,12 @@ import JournalList from '@/components/journal/journal-list';
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import Login from '@/components/auth/login';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Timestamp } from 'firebase/firestore';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import JournalForm from '@/components/journal/journal-form';
 
-// This is a client component, but we fetch initial data and then manage state
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
@@ -27,8 +28,17 @@ export default function DashboardPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [openBooks, setOpenBooks] = useState<Record<string, boolean>>({});
+  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
 
   const isLoading = areEntriesLoading || isUserLoading;
+
+  const handleEdit = (entry: JournalEntry) => {
+    setEditingEntry(entry);
+  };
+
+  const handleCloseModal = () => {
+    setEditingEntry(null);
+  };
 
   const toggleBook = (book: string) => {
     setOpenBooks(prev => ({
@@ -62,18 +72,16 @@ export default function DashboardPage() {
         return acc;
     }, {} as Record<string, JournalEntry[]>);
     
-    // Sort groups by canonical book order
     const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
         const indexA = BIBLE_BOOKS.indexOf(a);
         const indexB = BIBLE_BOOKS.indexOf(b);
-        if (indexA === -1) return 1; // Put "Sin libro" at the end
+        if (indexA === -1) return 1;
         if (indexB === -1) return -1;
         return indexA - indexB;
     });
 
     const sortedGroupedEntries: Record<string, JournalEntry[]> = {};
     for (const key of sortedGroupKeys) {
-        // Sort entries within each book by creation date (oldest first)
         const sortedEntries = grouped[key].sort((a, b) => {
             const timeA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : new Date(a.createdAt as any).getTime();
             const timeB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : new Date(b.createdAt as any).getTime();
@@ -129,7 +137,20 @@ export default function DashboardPage() {
         isLoading={isLoading}
         openBooks={openBooks}
         toggleBook={toggleBook}
+        onEdit={handleEdit}
       />
+
+      <Dialog open={!!editingEntry} onOpenChange={(open) => !open && handleCloseModal()}>
+        <DialogContent className="sm:max-w-[625px]">
+          <DialogHeader>
+            <DialogTitle>Editar Entrada</DialogTitle>
+          </DialogHeader>
+          {editingEntry && (
+            <JournalForm entry={editingEntry} onSave={handleCloseModal} />
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
