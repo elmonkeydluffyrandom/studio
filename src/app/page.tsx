@@ -13,6 +13,7 @@ import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import JournalForm from '@/components/journal/journal-form';
 import { ViewEntryModal } from '@/components/journal/view-entry-modal';
+import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
