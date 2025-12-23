@@ -107,7 +107,7 @@ export default function DashboardPage() {
   
   if (isUserLoading) {
      return (
-        <div className="container mx-auto">
+        <div className="container mx-auto max-w-7xl">
              <div className="flex justify-center items-center h-64">
                 <div className="text-2xl font-headline text-muted-foreground">Cargando...</div>
             </div>
@@ -120,7 +120,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto">
+    <div className="container mx-auto max-w-7xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-foreground">Diario Bíblico</h1>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
       )}
 
       <Dialog open={!!editingEntry || isCreating} onOpenChange={(open) => !open && handleCloseEdit()}>
-        <DialogContent className="sm:max-w-[625px]">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{editingEntry ? 'Editar Entrada' : 'Nueva Entrada'}</DialogTitle>
           </DialogHeader>

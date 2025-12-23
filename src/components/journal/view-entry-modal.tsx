@@ -82,15 +82,7 @@ export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: Vi
 
         <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
           <div className="flex w-full justify-end gap-2">
-             <div className="sm:hidden md:block">
-                <DownloadPdfButton entry={entry} />
-             </div>
-             <div className="hidden">
-                 <Button variant="outline">
-                    <Download className="mr-2 h-4 w-4" />
-                    Descargar PDF
-                </Button>
-             </div>
+             <DownloadPdfButton entry={entry} />
             <Button variant="outline" onClick={onEdit}>
                 <Edit className="mr-2 h-4 w-4" />
                 Editar

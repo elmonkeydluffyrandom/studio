@@ -7,7 +7,7 @@ export default function NewEntryPage() {
   const { user, isUserLoading } = useUser();
 
   if (isUserLoading) {
-    return <div className="container mx-auto max-w-4xl text-center p-8">Cargando...</div>
+    return <div className="container mx-auto max-w-4xl text-center p-4 md:p-6 lg:p-8">Cargando...</div>
   }
 
   if (!user) {

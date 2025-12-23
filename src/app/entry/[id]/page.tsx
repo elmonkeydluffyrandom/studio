@@ -35,7 +35,7 @@ export default function EntryDetailPage() {
   const { data: entry, isLoading: isEntryLoading } = useDoc<JournalEntry>(entryRef);
 
   if (isUserLoading || (entryRef && isEntryLoading)) {
-    return <div className="container mx-auto max-w-4xl text-center p-8">Cargando...</div>;
+    return <div className="container mx-auto max-w-4xl text-center p-4 md:p-6 lg:p-8">Cargando...</div>;
   }
 
   if (!user) {
@@ -44,7 +44,7 @@ export default function EntryDetailPage() {
 
   if (!entry) {
     return (
-        <div className="container mx-auto max-w-4xl text-center p-8">
+        <div className="container mx-auto max-w-4xl text-center p-4 md:p-6 lg:p-8">
             <h1 className="text-2xl font-bold">Entrada no encontrada</h1>
             <p className="text-muted-foreground mt-2">
                 La entrada que buscas no existe o ha sido eliminada.
@@ -141,7 +141,7 @@ export default function EntryDetailPage() {
       </div>
       
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="sm:max-w-[625px]">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Editar Entrada</DialogTitle>
           </DialogHeader>
