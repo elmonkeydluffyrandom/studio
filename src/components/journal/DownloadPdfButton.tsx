@@ -36,56 +36,62 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
   };
 
   const addSingleEntryToPdf = (doc: jsPDF, entry: JournalEntry) => {
-    const margin = 20;
-    let y = 20;
     const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = 40;
 
-    // 1. Title
-    doc.setFont("times", "bold");
+    // --- Header ---
+    const headerColor = '#1e293b'; // slate-800
+    doc.setFillColor(headerColor);
+    doc.rect(0, 0, pageWidth, 40, 'F'); // Filled rectangle for header
+
+    // Title
+    doc.setFont('times', 'bold');
     doc.setFontSize(22);
-    doc.text(entry.bibleVerse || "Entrada Sin Título", pageWidth / 2, y, { align: "center" });
-    y += 10;
+    doc.setTextColor('#ffffff');
+    doc.text(entry.bibleVerse || 'Entrada Sin Título', pageWidth / 2, 20, { align: 'center' });
 
-    // 2. Date
+    // Date
     doc.setFontSize(12);
-    doc.setFont("times", "italic");
+    doc.setFont('times', 'normal');
+    doc.setTextColor('#cbd5e1'); // slate-300
     const getDate = (date: Date | Timestamp) => {
       if (!date) return new Date();
       return date instanceof Timestamp ? date.toDate() : new Date(date);
     }
     const dateStr = getDate(entry.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-    doc.text(dateStr, pageWidth / 2, y, { align: "center" });
-    y += 5;
-    
-    // 3. Separator Line
-    doc.setLineWidth(0.5);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 15;
+    doc.text(dateStr, pageWidth / 2, 28, { align: 'center' });
+
+    // Reset text color for body
+    doc.setTextColor('#000000');
+    y = 55; // Start body content below the header
 
 
-    // 4. Content
+    // --- Content ---
     const addSection = (label: string, text: string) => {
         if (!text) return;
-        if (y > 260) {
+        if (y > 260) { // Add new page if content overflows
             doc.addPage();
             y = 25;
         }
         doc.setFont("times", "bold");
         doc.setFontSize(14);
+        doc.setTextColor(headerColor); // Section title color
         doc.text(label, margin, y);
         y += 8;
 
         doc.setFont("times", "normal");
         doc.setFontSize(12);
-        const lines = doc.splitTextToSize(text, 170); // Adjust text to width
+        doc.setTextColor('#000000'); // Body text color
+        const lines = doc.splitTextToSize(text, pageWidth - (margin * 2));
         doc.text(lines, margin, y);
-        y += (lines.length * 5) + 10; // Calculate new vertical space
+        y += (lines.length * 5) + 12; // Dynamic vertical space
     };
     
-    addSection("Escritura", entry.verseText);
-    addSection("Observación", entry.observation);
-    addSection("Aplicación", entry.teaching);
-    addSection("Oración", entry.practicalApplication);
+    addSection("Escritura (S - Scripture)", entry.verseText);
+    addSection("Observación (O - Observation)", entry.observation);
+    addSection("Aplicación (A - Application)", entry.teaching);
+    addSection("Oración (P - Prayer)", entry.practicalApplication);
 
     if(entry.tagIds && entry.tagIds.length > 0){
       addSection('Etiquetas', entry.tagIds.join(', '));
@@ -108,11 +114,11 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     y += 20;
 
     for (const currentEntry of sortedEntries) {
-        y = addBulkEntryContent(doc, currentEntry, y);
-        if (y > 250) { // Check for new page
+        if (y > 250) { // Check for new page before adding new entry
             doc.addPage();
             y = 20;
         }
+        y = addBulkEntryContent(doc, currentEntry, y);
     }
   }
 
@@ -122,43 +128,57 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     const usableWidth = pageWidth - margin * 2;
     let y = startY;
 
-    // --- Header ---
-    doc.setFont('Helvetica', 'bold');
+    // --- Header for each entry ---
+    const headerColor = '#1e293b'; // slate-800
+    doc.setFont('times', 'bold');
     doc.setFontSize(16);
-    doc.setTextColor(30, 41, 59);
+    doc.setTextColor(headerColor);
     doc.text(entry.bibleVerse, margin, y);
     y += 8;
-    doc.setDrawColor(226, 232, 240); // Light gray line
-    doc.line(margin, y, pageWidth - margin, y);
+
+    const getDate = (date: Date | Timestamp) => {
+      if (!date) return new Date();
+      return date instanceof Timestamp ? date.toDate() : new Date(date);
+    }
+    const dateStr = getDate(entry.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+    doc.setFont('times', 'italic');
+    doc.setFontSize(10);
+    doc.setTextColor('#64748b'); // slate-500
+    doc.text(dateStr, margin, y);
     y += 8;
 
 
     // --- Body ---
     const addSection = (title: string, content: string) => {
-      if (y > 250) { // Check for new page
+      if (!content) return;
+      if (y > 260) { // Check for new page inside a long entry
           doc.addPage();
           y = 20;
       }
       
-      doc.setTextColor(41, 51, 66);
-      doc.setFont('Helvetica', 'bold');
+      doc.setTextColor('#334155'); // slate-700
+      doc.setFont('times', 'bold');
       doc.setFontSize(12);
       doc.text(title, margin, y);
       y += 6;
 
-      doc.setTextColor(71, 85, 105);
-      doc.setFont('Helvetica', 'normal');
-      
+      doc.setTextColor('#1e293b'); // slate-800
+      doc.setFont('times', 'normal');
+      doc.setFontSize(12);
       const splitContent = doc.splitTextToSize(content, usableWidth);
       doc.text(splitContent, margin, y);
 
-      y += (splitContent.length * 4) + 8;
+      y += (splitContent.length * 5) + 8;
     };
     
     addSection('Observación', entry.observation);
     addSection('Aplicación', entry.teaching);
     
-    y += 5; // Extra space between entries
+    // --- Separator ---
+    doc.setDrawColor('#e2e8f0'); // slate-200
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10; // Extra space between entries
 
     return y;
   }
