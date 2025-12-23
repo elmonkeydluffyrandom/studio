@@ -1,5 +1,5 @@
 'use client';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -21,16 +21,19 @@ import { FormControl } from '@/components/ui/form';
 
 export default function EntryDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const entryId = Array.isArray(id) ? id[0] : id;
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
 
+  // This ref is memoized and will be null until `user` and `firestore` are available.
   const entryRef = useMemoFirebase(
     () => (user && firestore && entryId ? doc(firestore, 'users', user.uid, 'journalEntries', entryId) : null),
     [user, firestore, entryId]
   );
 
+  // useDoc handles the null ref and will set isLoading to true.
   const { data: entry, isLoading: isEntryLoading } = useDoc<JournalEntry>(entryRef);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -44,11 +47,13 @@ export default function EntryDetailPage() {
     tagIds: '',
   });
 
+  // This effect synchronizes the form state when the entry data loads or changes.
   useEffect(() => {
     if (entry) {
+      const verseOnly = entry.bibleVerse.replace(entry.bibleBook || '', '').trim();
       setFormData({
-        bibleBook: entry.bibleBook || '', // Defensive check for old entries
-        bibleVerse: entry.bibleVerse.replace(entry.bibleBook || '', '').trim(),
+        bibleBook: entry.bibleBook || '', // Default to empty string if bibleBook is missing
+        bibleVerse: verseOnly,
         verseText: entry.verseText,
         observation: entry.observation,
         teaching: entry.teaching,
@@ -56,7 +61,7 @@ export default function EntryDetailPage() {
         tagIds: entry.tagIds?.join(', ') || '',
       });
     }
-  }, [entry]);
+  }, [entry]); // Dependency on `entry` ensures this runs when data arrives.
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -68,14 +73,13 @@ export default function EntryDetailPage() {
   }
 
   const handleUpdate = async () => {
-    if (!user || !firestore || !entry) return;
+    if (!user || !firestore || !entryRef) return; // Guard against updates if refs are not ready
 
     const tags = formData.tagIds.split(',').map(tag => tag.trim()).filter(tag => tag);
-    const completeBibleVerse = `${formData.bibleBook} ${formData.bibleVerse}`;
+    const completeBibleVerse = `${formData.bibleBook} ${formData.bibleVerse}`.trim();
 
     try {
       const entryToUpdate = {
-        ...entry,
         bibleBook: formData.bibleBook,
         bibleVerse: completeBibleVerse,
         verseText: formData.verseText,
@@ -86,13 +90,14 @@ export default function EntryDetailPage() {
         updatedAt: Timestamp.now(),
       };
       
+      // Use setDoc with merge to avoid overwriting the whole document
       await setDoc(entryRef, entryToUpdate, { merge: true });
 
       toast({
         title: 'Entrada actualizada',
         description: 'Tus cambios han sido guardados.',
       });
-      setIsEditing(false);
+      setIsEditing(false); // Exit editing mode on success
     } catch (error: any) {
       console.error("Error updating entry:", error);
       toast({
@@ -104,30 +109,36 @@ export default function EntryDetailPage() {
   };
 
   const handleCancel = () => {
+    // Reset form to original entry data
     if (entry) {
-        setFormData({
-            bibleBook: entry.bibleBook || '', // Defensive check
-            bibleVerse: entry.bibleVerse.replace(entry.bibleBook || '', '').trim(),
-            verseText: entry.verseText,
-            observation: entry.observation,
-            teaching: entry.teaching,
-            practicalApplication: entry.practicalApplication,
-            tagIds: entry.tagIds?.join(', ') || '',
-        });
+      const verseOnly = entry.bibleVerse.replace(entry.bibleBook || '', '').trim();
+      setFormData({
+          bibleBook: entry.bibleBook || '', // Defensive check
+          bibleVerse: verseOnly,
+          verseText: entry.verseText,
+          observation: entry.observation,
+          teaching: entry.teaching,
+          practicalApplication: entry.practicalApplication,
+          tagIds: entry.tagIds?.join(', ') || '',
+      });
     }
     setIsEditing(false);
   }
 
+  // --- Robust Loading and Guard States ---
 
-  if (isUserLoading || isEntryLoading) {
+  // 1. Show loading indicator while user or entry data is being fetched.
+  if (isUserLoading || (entryRef && isEntryLoading)) {
     return <div className="container mx-auto max-w-4xl text-center p-8">Cargando...</div>;
   }
 
+  // 2. After loading, if there's no user, show the login component.
   if (!user) {
     return <Login />;
   }
 
-  if (!entry && !isEntryLoading) {
+  // 3. After loading, if there's no entry, it means it doesn't exist.
+  if (!entry) {
     return (
         <div className="container mx-auto max-w-4xl text-center p-8">
             <h1 className="text-2xl font-bold">Entrada no encontrada</h1>
@@ -141,9 +152,7 @@ export default function EntryDetailPage() {
     );
   }
 
-  if (!entry) {
-    return null; 
-  }
+  // --- Render Component (Data is guaranteed to exist here) ---
 
   return (
     <div className="container mx-auto max-w-4xl print-container">
@@ -157,38 +166,35 @@ export default function EntryDetailPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
           <div>
              {isEditing ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-3 sm:gap-4 space-y-4 sm:space-y-0">
-                    <div className='sm:col-span-2'>
-                        <Select onValueChange={handleSelectChange} defaultValue={formData.bibleBook || ''}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un libro..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {BIBLE_BOOKS.map(book => (
-                              <SelectItem key={book} value={book}>{book}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                    </div>
+                 <div className="flex flex-col sm:flex-row gap-2 items-center">
+                    <Select onValueChange={handleSelectChange} value={formData.bibleBook || ''}>
+                      <FormControl>
+                        <SelectTrigger className="sm:w-[250px]">
+                          <SelectValue placeholder="Selecciona un libro..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {BIBLE_BOOKS.map(book => (
+                          <SelectItem key={book} value={book}>{book}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Input 
                         name="bibleVerse"
                         value={formData.bibleVerse}
                         onChange={handleInputChange}
                         placeholder="Ej: 23:1-4"
-                        className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0"
+                        className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title h-auto p-0 border-0 shadow-none focus-visible:ring-0 flex-1"
                     />
                  </div>
             ) : (
                 <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
-
             )}
             <p className="text-sm text-muted-foreground mt-1">
               {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 self-start sm:self-center">
             {isEditing ? (
                 <>
                     <Button onClick={handleUpdate} variant="default" className="bg-green-600 hover:bg-green-700">
@@ -206,11 +212,11 @@ export default function EntryDetailPage() {
                         <Edit className="mr-2 h-4 w-4" />
                         Editar
                     </Button>
-                    <DeleteEntryDialog entryId={entry.id ?? ''}>
-                    <Button variant="destructive" >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar
-                    </Button>
+                    <DeleteEntryDialog entryId={entry.id}>
+                      <Button variant="destructive" >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Eliminar
+                      </Button>
                     </DeleteEntryDialog>
                 </>
             )}
@@ -294,7 +300,7 @@ export default function EntryDetailPage() {
                     name="tagIds"
                     value={formData.tagIds}
                     onChange={handleInputChange}
-                    placeholder="Ej: Oración, Familia, Fe"
+                    placeholder="Ej: Oración, Familia, Fe (separadas por coma)"
                     className="mt-2"
                  />
             ) : (
