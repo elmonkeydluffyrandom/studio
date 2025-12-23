@@ -3,8 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
-import { formatDate } from '@/lib/utils';
 import jsPDF from 'jspdf';
+import { Timestamp } from 'firebase/firestore';
 
 interface DownloadPdfButtonProps {
   entry?: JournalEntry;
@@ -25,90 +25,98 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       format: 'a4',
     });
 
-    // Use a serif font
-    doc.setFont('Times', 'normal');
-
     if (entry) {
-        // Download single entry
-        addEntryToPdf(doc, entry);
+        addSingleEntryToPdf(doc, entry);
     } else if (entries && entries.length > 0) {
-        // Download multiple entries
-        let y = 20;
-        const sortedEntries = [...entries].sort((a,b) => (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0));
-
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(28);
-        doc.text("Mi Diario Bíblico", 20, y);
-        y += 20;
-
-        for (const currentEntry of sortedEntries) {
-            y = addBulkEntryToPdf(doc, currentEntry, y);
-            if (y > 250) { // Check for new page
-                doc.addPage();
-                y = 20;
-            }
-        }
+        addBulkEntriesToPdf(doc, entries);
     }
     
     const fileName = entry ? `${entry.bibleVerse.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
     doc.save(fileName);
   };
 
-  const addEntryToPdf = (doc: jsPDF, entry: JournalEntry) => {
-    const pageWidth = doc.internal.pageSize.getWidth();
+  const addSingleEntryToPdf = (doc: jsPDF, entry: JournalEntry) => {
     const margin = 20;
-    const usableWidth = pageWidth - margin * 2;
-    let y = 30;
+    let y = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-    // --- Header ---
-    doc.setFont('Times', 'bold');
+    // 1. Title
+    doc.setFont("times", "bold");
     doc.setFontSize(22);
-    doc.text(entry.bibleVerse, pageWidth / 2, y, { align: 'center' });
+    doc.text(entry.bibleVerse || "Entrada Sin Título", pageWidth / 2, y, { align: "center" });
     y += 10;
-    
-    doc.setFont('Times', 'italic');
-    doc.setFontSize(12);
-    const creationDate = `Creado el ${formatDate(entry.createdAt)}`;
-    doc.text(creationDate, pageWidth / 2, y, { align: 'center' });
-    y += 8;
 
-    doc.setDrawColor(180, 180, 180); // gray line
+    // 2. Date
+    doc.setFontSize(12);
+    doc.setFont("times", "italic");
+    const getDate = (date: Date | Timestamp) => {
+      if (!date) return new Date();
+      return date instanceof Timestamp ? date.toDate() : new Date(date);
+    }
+    const dateStr = getDate(entry.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+    doc.text(dateStr, pageWidth / 2, y, { align: "center" });
+    y += 5;
+    
+    // 3. Separator Line
+    doc.setLineWidth(0.5);
     doc.line(margin, y, pageWidth - margin, y);
     y += 15;
 
 
-    // --- Body ---
-    const addSection = (title: string, content: string, isQuote = false) => {
-      if (y > 260) { // Check for new page
-          doc.addPage();
-          y = 25;
-      }
-      
-      doc.setFont('Times', 'bold');
-      doc.setFontSize(14);
-      doc.text(title, margin, y);
-      y += 8;
+    // 4. Content
+    const addSection = (label: string, text: string) => {
+        if (!text) return;
+        if (y > 260) {
+            doc.addPage();
+            y = 25;
+        }
+        doc.setFont("times", "bold");
+        doc.setFontSize(14);
+        doc.text(label, margin, y);
+        y += 8;
 
-      doc.setFont('Times', isQuote ? 'italic' : 'normal');
-      doc.setFontSize(12);
-      
-      const splitContent = doc.splitTextToSize(content || 'N/A', usableWidth);
-      doc.text(splitContent, margin, y);
-
-      y += (splitContent.length * 5) + 12; // Adjust y based on content length
+        doc.setFont("times", "normal");
+        doc.setFontSize(12);
+        const lines = doc.splitTextToSize(text, 170); // Adjust text to width
+        doc.text(lines, margin, y);
+        y += (lines.length * 5) + 10; // Calculate new vertical space
     };
     
-    addSection('Escritura (S)', entry.verseText, true);
-    addSection('Observación (O)', entry.observation);
-    addSection('Aplicación (A)', entry.teaching);
-    addSection('Oración (P)', entry.practicalApplication);
+    addSection("Escritura", entry.verseText);
+    addSection("Observación", entry.observation);
+    addSection("Aplicación", entry.teaching);
+    addSection("Oración", entry.practicalApplication);
 
     if(entry.tagIds && entry.tagIds.length > 0){
-        addSection('Etiquetas', entry.tagIds.join(', '));
+      addSection('Etiquetas', entry.tagIds.join(', '));
     }
   }
 
-  const addBulkEntryToPdf = (doc: jsPDF, entry: JournalEntry, startY: number) => {
+  const addBulkEntriesToPdf = (doc: jsPDF, entries: JournalEntry[]) => {
+    let y = 20;
+    const getTime = (date: any): number => {
+      if (!date) return 0;
+      if (typeof date.toMillis === 'function') return date.toMillis();
+      if (date.seconds) return date.seconds * 1000;
+      return new Date(date).getTime();
+    };
+    const sortedEntries = [...entries].sort((a,b) => getTime(a.createdAt) - getTime(b.createdAt));
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.text("Mi Diario Bíblico", 20, y);
+    y += 20;
+
+    for (const currentEntry of sortedEntries) {
+        y = addBulkEntryContent(doc, currentEntry, y);
+        if (y > 250) { // Check for new page
+            doc.addPage();
+            y = 20;
+        }
+    }
+  }
+
+  const addBulkEntryContent = (doc: jsPDF, entry: JournalEntry, startY: number) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
     const usableWidth = pageWidth - margin * 2;

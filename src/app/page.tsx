@@ -84,17 +84,17 @@ export default function DashboardPage() {
         return acc;
     }, {} as Record<string, JournalEntry[]>);
     
+    const getTime = (date: any): number => {
+        if (!date) return 0;
+        if (typeof date.toMillis === 'function') return date.toMillis(); // Firebase Timestamp
+        if (date.seconds) return date.seconds * 1000; // Raw object from Firebase
+        return new Date(date).getTime(); // JS Date or string
+    };
+
     // Explicitly sort entries within each book group by creation date (asc)
     for (const book in grouped) {
       grouped[book].sort((a, b) => {
-        const getMillis = (date: any) => {
-          if (!date) return 0;
-          // If it is a Firestore Timestamp
-          if (date.seconds) return date.seconds * 1000;
-          // If it is a Date object or String
-          return new Date(date).getTime();
-        };
-        return getMillis(a.createdAt) - getMillis(b.createdAt);
+        return getTime(a.createdAt) - getTime(b.createdAt);
       });
     }
 
