@@ -98,13 +98,14 @@ export default function JournalForm({ entry }: JournalFormProps) {
               tagIds: tags,
               createdAt: Timestamp.now(),
             };
+            // No await here for offline-first approach, fire and forget
             const docRef = await addDoc(entriesCollection, newEntry);
             
             toast({
               title: 'Entrada creada',
-              description: 'Tu entrada ha sido guardada exitosamente.',
+              description: 'Tu nueva entrada se está guardando.',
             });
-            router.push(`/entry/${docRef.id}`);
+            router.push(`/`);
         }
         router.refresh();
 
@@ -162,7 +163,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="verseText"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Texto del Versículo</FormLabel>
+                  <FormLabel>Texto del Versículo (S - Scripture)</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Escribe aquí el texto del versículo..."
@@ -170,7 +171,6 @@ export default function JournalForm({ entry }: JournalFormProps) {
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>Escribe manualmente el texto del versículo que estás estudiando.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -181,7 +181,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="observation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Observación</FormLabel>
+                  <FormLabel>Observación (O - Observation)</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
@@ -199,10 +199,10 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="teaching"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Enseñanza</FormLabel>
+                  <FormLabel>Aplicación (A - Application)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="¿Qué significa este pasaje? ¿Qué principio o verdad teológica enseña sobre Dios, el hombre, o la salvación?"
+                      placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
                       className="min-h-[150px]"
                       {...field}
                     />
@@ -217,10 +217,10 @@ export default function JournalForm({ entry }: JournalFormProps) {
               name="practicalApplication"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Aplicación Práctica</FormLabel>
+                  <FormLabel>Oración (P - Prayer)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
+                      placeholder="Escribe una oración basada en tu estudio. Habla con Dios sobre lo que has aprendido."
                       className="min-h-[150px]"
                       {...field}
                     />

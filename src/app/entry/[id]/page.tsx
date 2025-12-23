@@ -192,7 +192,7 @@ export default function EntryDetailPage() {
 
       <div className="space-y-8">
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura (S - Scripture)</h2>
           {isEditing ? (
               <Textarea 
                 name="verseText"
@@ -209,7 +209,7 @@ export default function EntryDetailPage() {
         </div>
 
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Observación</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Observación (O - Observation)</h2>
            {isEditing ? (
               <Textarea 
                 name="observation"
@@ -226,30 +226,29 @@ export default function EntryDetailPage() {
         </div>
         
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Enseñanza</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación (A - Application)</h2>
           {isEditing ? (
               <Textarea 
                 name="teaching"
                 value={formData.teaching}
                 onChange={handleInputChange}
-                placeholder="¿Qué significa este pasaje? ¿Qué principio o verdad teológica enseña sobre Dios, el hombre, o la salvación?"
+                placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
                 className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed min-h-[150px]"
               />
           ) : (
             <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
                 {entry.teaching}
-            </p>
-          )}
+            </p>          )}
         </div>
 
         <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación Práctica</h2>
+          <h2 className="text-2xl font-headline font-semibold print-section-title">Oración (P - Prayer)</h2>
           {isEditing ? (
               <Textarea 
                 name="practicalApplication"
                 value={formData.practicalApplication}
                 onChange={handleInputChange}
-                placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
+                placeholder="Escribe una oración basada en tu estudio. Habla con Dios sobre lo que has aprendido."
                 className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed min-h-[150px]"
               />
           ) : (
