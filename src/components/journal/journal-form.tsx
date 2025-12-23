@@ -35,7 +35,7 @@ import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 
 const FormSchema = z.object({
-  bibleBook: z.string({ required_error: "Por favor selecciona un libro."}),
+  bibleBook: z.string({ required_error: "Por favor selecciona un libro."}).min(1, 'El libro es requerido.'),
   bibleVerse: z.string().min(1, 'La cita es requerida (ej. 1:1-5).'),
   verseText: z.string().min(10, 'El texto del versículo es requerido.'),
   observation: z.string().min(10, 'La observación es requerida.'),
@@ -62,7 +62,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
-      bibleVerse: entry ? entry.bibleVerse.replace(entry.bibleBook, '').trim() : '',
+      bibleVerse: entry ? entry.bibleVerse.replace(entry.bibleBook || '', '').trim() : '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
@@ -106,6 +106,7 @@ export default function JournalForm({ entry }: JournalFormProps) {
               description: 'Tu entrada ha sido guardada exitosamente.',
             });
             router.push(`/entry/${entry.id}`);
+            router.refresh();
 
         } else {
             // Create new entry
@@ -114,17 +115,15 @@ export default function JournalForm({ entry }: JournalFormProps) {
               ...entryData,
               createdAt: Timestamp.now(),
             };
-            // No await here for offline-first approach, fire and forget
-            const docRef = await addDoc(entriesCollection, newEntry);
+            
+            await addDoc(entriesCollection, newEntry);
             
             toast({
               title: 'Entrada creada',
-              description: 'Tu nueva entrada se está guardando.',
+              description: 'Tu nueva entrada ha sido guardada.',
             });
             router.push(`/`);
         }
-        router.refresh();
-
       } catch (error: any) {
         console.error("Error saving entry:", error);
 

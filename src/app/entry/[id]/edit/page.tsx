@@ -1,24 +1,12 @@
 'use client';
-import { useParams, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import { formatDate } from '@/lib/utils';
-import { ArrowLeft, Edit, Trash2, Save, X } from 'lucide-react';
-import { DeleteEntryDialog } from '@/components/journal/delete-entry-dialog';
+import { useParams } from 'next/navigation';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import type { JournalEntry } from '@/lib/types';
 import Login from '@/components/auth/login';
-import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
-import { BIBLE_BOOKS } from '@/lib/bible-books';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FormControl } from '@/components/ui/form';
 import JournalForm from '@/components/journal/journal-form';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export default function EntryEditPage() {
   const { id } = useParams();
