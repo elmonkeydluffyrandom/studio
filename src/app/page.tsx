@@ -13,6 +13,7 @@ import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import JournalForm from '@/components/journal/journal-form';
 import { ViewEntryModal } from '@/components/journal/view-entry-modal';
+import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -83,6 +84,16 @@ export default function DashboardPage() {
         return acc;
     }, {} as Record<string, JournalEntry[]>);
     
+    // Explicitly sort entries within each book group by creation date (asc)
+    for (const book in grouped) {
+      grouped[book].sort((a, b) => {
+        // Timestamps can be compared with toMillis()
+        const timeA = a.createdAt?.toMillis() ?? 0;
+        const timeB = b.createdAt?.toMillis() ?? 0;
+        return timeA - timeB;
+      });
+    }
+
     const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
         const indexA = BIBLE_BOOKS.indexOf(a);
         const indexB = BIBLE_BOOKS.indexOf(b);
@@ -120,10 +131,13 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-headline font-bold text-foreground">Diario Bíblico</h1>
           <p className="text-muted-foreground">Tus reflexiones recientes.</p>
         </div>
-        <Button onClick={() => setIsCreating(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Nueva Entrada
-        </Button>
+        <div className='flex gap-2'>
+          <DownloadPdfButton entries={entries ?? undefined} />
+          <Button onClick={() => setIsCreating(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Nueva Entrada
+          </Button>
+        </div>
       </div>
 
       <div className="mb-8">
