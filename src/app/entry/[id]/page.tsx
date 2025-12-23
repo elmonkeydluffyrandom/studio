@@ -1,5 +1,6 @@
 'use client';
-import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -11,12 +12,20 @@ import { doc } from 'firebase/firestore';
 import type { JournalEntry } from '@/lib/types';
 import Login from '@/components/auth/login';
 import DownloadPdfButton from '@/components/journal/DownloadPdfButton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import JournalForm from '@/components/journal/journal-form';
 
 export default function EntryDetailPage() {
   const { id } = useParams();
   const entryId = Array.isArray(id) ? id[0] : id;
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const [isEditing, setIsEditing] = useState(false);
 
   const entryRef = useMemoFirebase(
     () => (user && firestore && entryId ? doc(firestore, 'users', user.uid, 'journalEntries', entryId) : null),
@@ -47,82 +56,95 @@ export default function EntryDetailPage() {
     );
   }
 
+  const handleCloseModal = () => {
+    setIsEditing(false);
+  };
+
   return (
-    <div className="container mx-auto max-w-4xl print-container">
-      <header className="mb-8 no-print">
-        <Button variant="ghost" asChild className="mb-4">
-          <Link href="/">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver al Dashboard
-          </Link>
-        </Button>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
-          <div>
-            <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
-            </p>
-          </div>
-          <div className="flex gap-2 self-start sm:self-center">
-            <Button variant="outline" asChild>
-                <Link href={`/entry/${entry.id}/edit`}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Editar
-                </Link>
-            </Button>
-            <DeleteEntryDialog entryId={entry.id}>
-              <Button variant="destructive" >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Eliminar
+    <>
+      <div className="container mx-auto max-w-4xl print-container">
+        <header className="mb-8 no-print">
+          <Button variant="ghost" asChild className="mb-4">
+            <Link href="/">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Volver al Dashboard
+            </Link>
+          </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+            <div>
+              <h1 className="text-2xl sm:text-4xl font-headline font-bold text-foreground print-title">{entry.bibleVerse}</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
+              </p>
+            </div>
+            <div className="flex gap-2 self-start sm:self-center">
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar
               </Button>
-            </DeleteEntryDialog>
-          </div>
-        </div>
-      </header>
-
-      <div className="space-y-8">
-        <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura (S - Scripture)</h2>
-          <blockquote className="mt-2 border-l-4 border-primary pl-4 italic text-foreground/80 print-text">
-              {entry.verseText}
-          </blockquote>
-        </div>
-
-        <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Observación (O - Observation)</h2>
-          <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-              {entry.observation}
-          </p>
-        </div>
-        
-        <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación (A - Application)</h2>
-          <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-              {entry.teaching}
-          </p>
-        </div>
-
-        <div className="print-section">
-          <h2 className="text-2xl font-headline font-semibold print-section-title">Oración (P - Prayer)</h2>
-          <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-              {entry.practicalApplication}
-          </p>
-        </div>
-
-        { (entry.tagIds && entry.tagIds.length > 0) && (
-          <div className="print-section print-tags">
-            <h3 className="text-lg font-headline font-semibold print-section-title">Etiquetas</h3>
-            <div className="mt-2 flex flex-wrap gap-2">
-            {entry.tagIds?.map(tag => (
-                <Badge key={tag} variant="secondary" className="print-tag">
-                {tag}
-                </Badge>
-            ))}
+              <DeleteEntryDialog entryId={entry.id}>
+                <Button variant="destructive" >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Eliminar
+                </Button>
+              </DeleteEntryDialog>
             </div>
           </div>
-        )}
+        </header>
+
+        <div className="space-y-8">
+          <div className="print-section">
+            <h2 className="text-2xl font-headline font-semibold print-section-title">Escritura (S - Scripture)</h2>
+            <blockquote className="mt-2 border-l-4 border-primary pl-4 italic text-foreground/80 print-text">
+                {entry.verseText}
+            </blockquote>
+          </div>
+
+          <div className="print-section">
+            <h2 className="text-2xl font-headline font-semibold print-section-title">Observación (O - Observation)</h2>
+            <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
+                {entry.observation}
+            </p>
+          </div>
+          
+          <div className="print-section">
+            <h2 className="text-2xl font-headline font-semibold print-section-title">Aplicación (A - Application)</h2>
+            <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
+                {entry.teaching}
+            </p>
+          </div>
+
+          <div className="print-section">
+            <h2 className="text-2xl font-headline font-semibold print-section-title">Oración (P - Prayer)</h2>
+            <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
+                {entry.practicalApplication}
+            </p>
+          </div>
+
+          { (entry.tagIds && entry.tagIds.length > 0) && (
+            <div className="print-section print-tags">
+              <h3 className="text-lg font-headline font-semibold print-section-title">Etiquetas</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+              {entry.tagIds?.map(tag => (
+                  <Badge key={tag} variant="secondary" className="print-tag">
+                  {tag}
+                  </Badge>
+              ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <DownloadPdfButton entry={entry} />
       </div>
-      <DownloadPdfButton entry={entry} />
-    </div>
+      
+      <Dialog open={isEditing} onOpenChange={setIsEditing}>
+        <DialogContent className="sm:max-w-[625px]">
+          <DialogHeader>
+            <DialogTitle>Editar Entrada</DialogTitle>
+          </DialogHeader>
+          <JournalForm entry={entry} onSave={handleCloseModal} isModal={true} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
