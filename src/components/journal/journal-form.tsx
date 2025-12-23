@@ -261,7 +261,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                 <FormLabel>Enseñanza</FormLabel>
                 <FormControl>
                 <Textarea
-                    placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Hay algún pecado que confesar, una promesa que reclamar, o un mandato que obedecer?"
+                    placeholder="¿Qué verdad espiritual, doctrina o principio eterno nos enseña este pasaje? ¿Qué aprendo sobre el carácter de Dios?"
                     className="min-h-[120px]"
                     {...field}
                 />
@@ -279,7 +279,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                 <FormLabel>Aplicación Práctica</FormLabel>
                 <FormControl>
                 <Textarea
-                    placeholder="Escribe una oración basada en tu estudio. Habla con Dios sobre lo que has aprendido."
+                    placeholder="¿Cómo puedo poner por obra esta enseñanza en mi vida hoy? Escribe acciones concretas, cambios de actitud o pasos de obediencia."
                     className="min-h-[120px]"
                     {...field}
                 />
