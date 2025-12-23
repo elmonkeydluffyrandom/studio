@@ -87,10 +87,14 @@ export default function DashboardPage() {
     // Explicitly sort entries within each book group by creation date (asc)
     for (const book in grouped) {
       grouped[book].sort((a, b) => {
-        // Timestamps can be compared with toMillis()
-        const timeA = a.createdAt?.toMillis() ?? 0;
-        const timeB = b.createdAt?.toMillis() ?? 0;
-        return timeA - timeB;
+        const getMillis = (date: any) => {
+          if (!date) return 0;
+          // If it is a Firestore Timestamp
+          if (date.seconds) return date.seconds * 1000;
+          // If it is a Date object or String
+          return new Date(date).getTime();
+        };
+        return getMillis(a.createdAt) - getMillis(b.createdAt);
       });
     }
 
