@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from 'react';
 import { PlusCircle } from 'lucide-react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import JournalList from '@/components/journal/journal-list';
@@ -11,7 +10,6 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebas
 import Login from '@/components/auth/login';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
-import { Timestamp } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import JournalForm from '@/components/journal/journal-form';
 import { ViewEntryModal } from '@/components/journal/view-entry-modal';
@@ -95,7 +93,6 @@ export default function DashboardPage() {
 
     const sortedGroupedEntries: Record<string, JournalEntry[]> = {};
     for (const key of sortedGroupKeys) {
-        // The sorting by createdAt is now handled by the Firestore query
         sortedGroupedEntries[key] = grouped[key];
     }
 
