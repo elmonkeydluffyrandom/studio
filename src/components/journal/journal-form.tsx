@@ -35,7 +35,7 @@ import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-const RichTextEditor = dynamic(() => import('../rich-text-editor'), { ssr: false });
+const RichTextEditor = dynamic(() => import('../rich-text-editor').then((mod) => mod.RichTextEditor), { ssr: false });
 
 const FormSchema = z.object({
   bibleBook: z.string({ required_error: "Por favor selecciona un libro."}).min(1, 'El libro es requerido.'),
