@@ -15,74 +15,73 @@ interface DownloadPdfButtonProps {
 export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonProps) {
   
     const handleDownload = async () => {
+        const pdf = new jsPDF('p', 'mm', 'a4');
         if (entry) {
-            // Temporarily add a class to the body to activate print styles
-            document.body.classList.add('print-mode');
+            await addSingleEntryToPdf(pdf, entry);
+            const fullBibleVerse = entry?.bibleVerse;
+            const fileName = entry ? `${fullBibleVerse?.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
+            pdf.save(fileName);
 
-            const element = document.querySelector('.print-container');
-            if (element) {
-                // We clone the node to avoid manipulating the original element
-                const clonedElement = element.cloneNode(true) as HTMLElement;
-                
-                // We need to append it to the body to make sure styles are applied
-                clonedElement.style.position = 'absolute';
-                clonedElement.style.left = '-9999px';
-                clonedElement.style.width = '210mm'; // A4 width
-                clonedElement.style.padding = '20mm'; // Standard margins
-                document.body.appendChild(clonedElement);
-
-
-                html2canvas(clonedElement, {
-                    scale: 2, // Higher scale for better quality
-                    useCORS: true,
-                    windowWidth: clonedElement.scrollWidth,
-                    windowHeight: clonedElement.scrollHeight
-                }).then(canvas => {
-                    const imgData = canvas.toDataURL('image/png');
-                    const pdf = new jsPDF('p', 'mm', 'a4');
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = pdf.internal.pageSize.getHeight();
-                    const canvasWidth = canvas.width;
-                    const canvasHeight = canvas.height;
-                    const ratio = canvasHeight / canvasWidth;
-                    const imgHeight = pdfWidth * ratio;
-                    let heightLeft = imgHeight;
-                    let position = 0;
-
-                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                    heightLeft -= pdfHeight;
-
-                    while (heightLeft > 0) {
-                        position = heightLeft - imgHeight;
-                        pdf.addPage();
-                        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                        heightLeft -= pdfHeight;
-                    }
-                    
-                    const fullBibleVerse = entry?.bibleVerse;
-                    const fileName = entry ? `${fullBibleVerse?.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
-                    pdf.save(fileName);
-                    
-                    // Cleanup
-                    document.body.removeChild(clonedElement);
-                    document.body.classList.remove('print-mode');
-                });
-            }
         } else if (entries && entries.length > 0) {
-            // Bulk download logic (remains text-based for now)
-            const doc = new jsPDF({
-                orientation: 'p',
-                unit: 'mm',
-                format: 'a4',
-            });
-            addBulkEntriesToPdf(doc, entries);
-            doc.save('BibliaDiario_Export.pdf');
+            await addBulkEntriesToPdf(pdf, entries);
+            pdf.save('BibliaDiario_Export.pdf');
         }
     };
 
+  const addSingleEntryToPdf = async (doc: jsPDF, entry: JournalEntry) => {
+    // Temporarily add a class to the body to activate print styles
+    document.body.classList.add('print-mode');
 
-  // NOTE: Bulk export does not support rich text formatting yet.
-  const addBulkEntriesToPdf = (doc: jsPDF, entries: JournalEntry[]) => {
+    const element = document.querySelector('.print-container-modal') ?? document.querySelector('.print-container');
+    
+    if (element) {
+        // We clone the node to avoid manipulating the original element
+        const clonedElement = element.cloneNode(true) as HTMLElement;
+        
+        // We need to append it to the body to make sure styles are applied
+        clonedElement.style.position = 'absolute';
+        clonedElement.style.left = '-9999px';
+        clonedElement.style.width = '210mm'; // A4 width
+        clonedElement.style.padding = '20mm'; // Standard margins
+        document.body.appendChild(clonedElement);
+
+
+        await html2canvas(clonedElement, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+            windowWidth: clonedElement.scrollWidth,
+            windowHeight: clonedElement.scrollHeight
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = doc; // Use the passed doc instance
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const ratio = canvasHeight / canvasWidth;
+            const imgHeight = pdfWidth * ratio;
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+            
+            // Cleanup
+            document.body.removeChild(clonedElement);
+            document.body.classList.remove('print-mode');
+        });
+    }
+  }
+
+
+  const addBulkEntriesToPdf = async (doc: jsPDF, entries: JournalEntry[]) => {
     let y = 20;
     const pageHeight = doc.internal.pageSize.getHeight();
     const bottomMargin = 25;
@@ -108,11 +107,11 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             }
         }
         checkAndAddPage();
-        y = addBulkEntryContent(doc, currentEntry, y);
+        y = await addBulkEntryContent(doc, currentEntry, y);
     }
   }
   
-  const addBulkEntryContent = (doc: jsPDF, entry: JournalEntry, startY: number) => {
+  const addBulkEntryContent = async (doc: jsPDF, entry: JournalEntry, startY: number): Promise<number> => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
@@ -152,47 +151,58 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
 
     // --- Body ---
-    const addSection = (title: string, content: string) => {
+    const addSection = async (title: string, content: string) => {
       if (!content) return;
       
       const titleHeight = 6;
-      const textLineHeight = 7;
 
-      if(checkNewPage(titleHeight)) {
-        // If new page, redraw section title
-        doc.setTextColor('#334155'); // slate-700
-        doc.setFont('times', 'bold');
-        doc.setFontSize(12);
-        doc.text(title, margin, y);
-        y += titleHeight;
-      } else {
-        doc.setTextColor('#334155'); // slate-700
-        doc.setFont('times', 'bold');
-        doc.setFontSize(12);
-        doc.text(title, margin, y);
-        y += titleHeight;
-      }
+      checkNewPage(titleHeight);
+      doc.setTextColor('#334155'); // slate-700
+      doc.setFont('times', 'bold');
+      doc.setFontSize(12);
+      doc.text(title, margin, y);
+      y += titleHeight;
       
       doc.setTextColor('#1e293b'); // slate-800
       doc.setFont('times', 'normal');
       doc.setFontSize(12);
       
-      // For bulk export, we just strip HTML for now
-      const plainText = content.replace(/<[^>]+>/g, '');
-      const textLines = doc.splitTextToSize(plainText, usableWidth);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content;
+      tempDiv.style.width = `${usableWidth}mm`;
+      tempDiv.style.fontFamily = 'times';
+      tempDiv.style.fontSize = '12pt';
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+      
+      await html2canvas(tempDiv, {
+          scale: 2,
+          windowWidth: tempDiv.scrollWidth,
+          windowHeight: tempDiv.scrollHeight
+      }).then(canvas => {
+          const imgData = canvas.toDataURL('image/png');
+          const imgProps = doc.getImageProperties(imgData);
+          const imgHeight = (imgProps.height * usableWidth) / imgProps.width;
 
-      textLines.forEach((line: string) => {
-        checkNewPage(textLineHeight);
-        doc.text(line, margin, y);
-        y += textLineHeight;
+          if (checkNewPage(imgHeight)) {
+              // If new page was added, re-draw section title
+              doc.setTextColor('#334155');
+              doc.setFont('times', 'bold');
+              doc.setFontSize(12);
+              doc.text(title, margin, y-titleHeight);
+          }
+          doc.addImage(imgData, 'PNG', margin, y, usableWidth, imgHeight);
+          y += imgHeight;
       });
 
-      y += 8; // spacing after section
+      document.body.removeChild(tempDiv);
+      y += 4; // spacing after section
     };
     
-    addSection('Observación', entry.observation);
-    addSection('Enseñanza', entry.teaching);
-    addSection('Aplicación Práctica', entry.practicalApplication);
+    await addSection('Observación', entry.observation);
+    await addSection('Enseñanza', entry.teaching);
+    await addSection('Aplicación Práctica', entry.practicalApplication);
     
     // --- Separator ---
     if(!checkNewPage(10)) {

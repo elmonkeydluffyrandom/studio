@@ -29,16 +29,15 @@ export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: Vi
   return (
     <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-2xl sm:text-3xl font-headline font-bold text-foreground">
-            {fullBibleVerse}
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
-          </p>
-        </DialogHeader>
-        
-        <div className="flex-1 overflow-y-auto space-y-6 pr-4 -mr-4">
+          <div className="flex-1 overflow-y-auto space-y-6 pr-4 -mr-4 print-container-modal">
+            <DialogHeader className="print-section">
+              <DialogTitle className="text-2xl sm:text-3xl font-headline font-bold text-foreground print-title">
+                {fullBibleVerse}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground !mt-1">
+                {entry.createdAt ? `Creado el ${formatDate(entry.createdAt)}` : ''}
+              </p>
+            </DialogHeader>
             <div className="print-section">
                 <h2 className="text-xl font-headline font-semibold print-section-title">Escritura (S - Scripture)</h2>
                 <blockquote className="mt-2 border-l-4 border-primary pl-4 italic text-foreground/80 print-text">
@@ -84,7 +83,7 @@ export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: Vi
             )}
         </div>
 
-        <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
+        <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0 no-print">
           <div className="flex w-full justify-end gap-2">
             <DownloadPdfButton entry={entry} />
             <Button variant="outline" onClick={onEdit}>

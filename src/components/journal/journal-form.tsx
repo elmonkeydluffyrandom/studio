@@ -3,7 +3,7 @@
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
@@ -35,7 +35,7 @@ import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-const RichTextEditor = dynamic(() => import('../rich-text-editor').then(mod => mod.RichTextEditor), { ssr: false });
+const RichTextEditor = dynamic(() => import('../rich-text-editor'), { ssr: false });
 
 const FormSchema = z.object({
   bibleBook: z.string({ required_error: "Por favor selecciona un libro."}).min(1, 'El libro es requerido.'),
@@ -69,7 +69,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
       chapter: entry?.chapter || undefined,
-      bibleVerse: entry?.bibleVerse.split(':').pop() || '',
+      bibleVerse: entry?.bibleVerse.split(' ').slice(1).join(' ').split(':').pop() || '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
       teaching: entry?.teaching || '',
@@ -77,6 +77,33 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       tagIds: entry?.tagIds?.join(', ') || '',
     },
   });
+  
+  useEffect(() => {
+    if (entry) {
+      form.reset({
+        bibleBook: entry.bibleBook || '',
+        chapter: entry.chapter || undefined,
+        bibleVerse: entry.bibleVerse.split(' ').slice(1).join(' ').split(':').pop() || '',
+        verseText: entry.verseText || '',
+        observation: entry.observation || '',
+        teaching: entry.teaching || '',
+        practicalApplication: entry.practicalApplication || '',
+        tagIds: entry.tagIds?.join(', ') || '',
+      });
+    } else {
+       form.reset({
+        bibleBook: '',
+        chapter: undefined,
+        bibleVerse: '',
+        verseText: '',
+        observation: '',
+        teaching: '',
+        practicalApplication: '',
+        tagIds: '',
+      });
+    }
+  }, [entry, form]);
+
 
   const onSubmit = (data: JournalFormValues) => {
     if (!user || !firestore) {
@@ -174,7 +201,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             render={({ field }) => (
                 <FormItem className="sm:col-span-3">
                 <FormLabel>Libro</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ""} value={field.value || ""}>
                     <FormControl>
                     <SelectTrigger>
                         <SelectValue placeholder="Selecciona un libro..." />
