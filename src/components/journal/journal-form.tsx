@@ -60,29 +60,31 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const { user } = useUser();
+  const { user } = useFirestore();
   const firestore = useFirestore();
   const isEditing = !!entry;
 
+  const defaultFormValues: Partial<JournalFormValues> = {
+    bibleBook: '',
+    chapter: undefined,
+    bibleVerse: '',
+    verseText: '',
+    observation: '',
+    teaching: '',
+    practicalApplication: '',
+    tagIds: '',
+  };
+
   const form = useForm<JournalFormValues>({
     resolver: zodResolver(FormSchema),
-    defaultValues: {
-      bibleBook: '',
-      chapter: undefined,
-      bibleVerse: '',
-      verseText: '',
-      observation: '',
-      teaching: '',
-      practicalApplication: '',
-      tagIds: '',
-    },
+    defaultValues: defaultFormValues,
   });
   
   useEffect(() => {
-    // This effect runs when the `entry` prop changes.
-    // `form.reset` updates all form fields with the new `entry` data.
-    // This is the correct React way to populate the form for editing.
+    // When the `entry` prop changes, reset the form with the new data.
+    // This correctly populates the form for editing.
     if (entry) {
+      console.log('Cargando datos en editor...', entry);
       const verseParts = entry.bibleVerse.split(' ').slice(1).join(' ').split(':');
       form.reset({
         bibleBook: entry.bibleBook || '',
@@ -95,16 +97,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         tagIds: entry.tagIds?.join(', ') || '',
       });
     } else {
-       form.reset({ // Reset to empty if no entry is provided (for new entries)
-        bibleBook: '',
-        chapter: undefined,
-        bibleVerse: '',
-        verseText: '',
-        observation: '',
-        teaching: '',
-        practicalApplication: '',
-        tagIds: '',
-      });
+       // Reset to empty if no entry is provided (for new entries)
+       form.reset(defaultFormValues);
     }
   }, [entry, form]);
 
@@ -166,7 +160,14 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               createdAt: Timestamp.now(),
             };
             
-            addDoc(entriesCollection, newEntry).catch(error => {
+            addDoc(entriesCollection, newEntry).then(docRef => {
+                toast({
+                    title: 'Entrada creada',
+                    description: 'Tu nueva entrada ha sido guardada.',
+                });
+                if (onSave) onSave();
+                else router.push(`/`);
+            }).catch(error => {
                 console.error("Error creating entry:", error);
                 if (error.code === 'permission-denied') {
                     const permissionError = new FirestorePermissionError({
@@ -183,13 +184,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                     });
                 }
             });
-            
-            toast({
-              title: 'Entrada creada',
-              description: 'Tu nueva entrada ha sido guardada.',
-            });
-            if (onSave) onSave();
-            else router.push(`/`);
         }
     });
   };

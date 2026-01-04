@@ -24,15 +24,21 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
 
   React.useEffect(() => {
     if (quill) {
-      quill.on('text-change', () => {
-        onChange(quill.root.innerHTML);
+      // Listen for text changes and bubble them up
+      quill.on('text-change', (delta, oldDelta, source) => {
+        if (source === 'user') {
+          onChange(quill.root.innerHTML);
+        }
       });
     }
   }, [quill, onChange]);
 
   React.useEffect(() => {
-    if (quill && value && quill.root.innerHTML !== value) {
+    // When the external 'value' prop changes, update Quill's content
+    if (quill && value !== quill.root.innerHTML) {
+      // Use clipboard.convert to properly handle HTML string
       const delta = quill.clipboard.convert(value);
+      // Set content silently to avoid triggering the text-change event unnecessarily
       quill.setContents(delta, 'silent');
     }
   }, [quill, value]);
