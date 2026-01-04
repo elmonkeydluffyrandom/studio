@@ -79,11 +79,16 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         const textLineHeight = 7;
         const sectionSpacing = 12;
 
-        // Check if title fits, if not, new page
-        if (y + titleHeight > pageHeight - bottomMargin) {
-            doc.addPage();
-            y = 25;
-        }
+        const checkNewPage = (neededHeight: number) => {
+            if (y + neededHeight > pageHeight - bottomMargin) {
+                doc.addPage();
+                y = 25;
+                return true;
+            }
+            return false;
+        };
+        
+        checkNewPage(titleHeight);
         
         doc.setFont("times", "bold");
         doc.setFontSize(14);
@@ -98,10 +103,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         doc.setTextColor('#000000'); // Body text color
 
         textLines.forEach((line: string) => {
-            if (y + textLineHeight > pageHeight - bottomMargin) {
-                doc.addPage();
-                y = 25; 
-            }
+            checkNewPage(textLineHeight);
             doc.text(line, margin, y);
             y += textLineHeight;
         });
@@ -138,37 +140,17 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     y += 20;
 
     for (const currentEntry of sortedEntries) {
-        const entryHeight = calculateEntryHeight(doc, currentEntry);
-        if (y + entryHeight > pageHeight - bottomMargin) { // Check for new page before adding new entry
-            doc.addPage();
-            y = 20;
+        const checkAndAddPage = () => {
+             if (y + 20 > pageHeight - bottomMargin) { // Minimal check before adding new entry
+                doc.addPage();
+                y = 20;
+            }
         }
+        checkAndAddPage();
         y = addBulkEntryContent(doc, currentEntry, y);
     }
   }
   
-  const calculateEntryHeight = (doc: jsPDF, entry: JournalEntry): number => {
-      const margin = 20;
-      const usableWidth = doc.internal.pageSize.getWidth() - margin * 2;
-      let height = 0;
-      
-      height += 16; // Header and date
-      
-      const addSectionHeight = (content: string) => {
-          if (!content) return;
-          height += 6; // Title
-          const splitContent = doc.splitTextToSize(content, usableWidth);
-          height += (splitContent.length * 5) + 8;
-      };
-
-      addSectionHeight(entry.observation);
-      addSectionHeight(entry.teaching);
-      height += 10; // Separator
-      
-      return height;
-  }
-
-
   const addBulkEntryContent = (doc: jsPDF, entry: JournalEntry, startY: number) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -177,7 +159,17 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     const bottomMargin = 25;
     let y = startY;
 
+    const checkNewPage = (neededHeight: number) => {
+      if (y + neededHeight > pageHeight - bottomMargin) {
+        doc.addPage();
+        y = 20;
+        return true;
+      }
+      return false;
+    }
+
     // --- Header for each entry ---
+    checkNewPage(16); // Header height
     const headerColor = '#1e293b'; // slate-800
     doc.setFont('times', 'bold');
     doc.setFontSize(16);
@@ -205,16 +197,21 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       const titleHeight = 6;
       const textLineHeight = 7;
 
-      if (y + titleHeight > pageHeight - bottomMargin) {
-          doc.addPage();
-          y = 20;
+      if(checkNewPage(titleHeight)) {
+        // If new page, redraw section title
+        doc.setTextColor('#334155'); // slate-700
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.text(title, margin, y);
+        y += titleHeight;
+      } else {
+        doc.setTextColor('#334155'); // slate-700
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.text(title, margin, y);
+        y += titleHeight;
       }
       
-      doc.setTextColor('#334155'); // slate-700
-      doc.setFont('times', 'bold');
-      doc.setFontSize(12);
-      doc.text(title, margin, y);
-      y += titleHeight;
 
       doc.setTextColor('#1e293b'); // slate-800
       doc.setFont('times', 'normal');
@@ -222,10 +219,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       
       const textLines = doc.splitTextToSize(content, usableWidth);
       textLines.forEach((line: string) => {
-        if(y + textLineHeight > pageHeight - bottomMargin) {
-            doc.addPage();
-            y = 20;
-        }
+        checkNewPage(textLineHeight);
         doc.text(line, margin, y);
         y += textLineHeight;
       });
@@ -237,15 +231,17 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     addSection('Enseñanza', entry.teaching);
     
     // --- Separator ---
-    doc.setDrawColor('#e2e8f0'); // slate-200
-    doc.setLineWidth(0.3);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 10; // Extra space between entries
+    if(!checkNewPage(10)) {
+        doc.setDrawColor('#e2e8f0'); // slate-200
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 10; // Extra space between entries
+    }
 
     return y;
   }
 
-  const buttonContent = (
+  return (
     <Button
       onClick={handleDownload}
       variant="outline"
@@ -256,6 +252,4 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       Descargar
     </Button>
   );
-
-  return buttonContent;
 }
