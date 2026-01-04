@@ -67,23 +67,27 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const form = useForm<JournalFormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      bibleBook: entry?.bibleBook || '',
-      chapter: entry?.chapter || undefined,
-      bibleVerse: entry?.bibleVerse.split(' ').slice(1).join(' ').split(':').pop() || '',
-      verseText: entry?.verseText || '',
-      observation: entry?.observation || '',
-      teaching: entry?.teaching || '',
-      practicalApplication: entry?.practicalApplication || '',
-      tagIds: entry?.tagIds?.join(', ') || '',
+      bibleBook: '',
+      chapter: undefined,
+      bibleVerse: '',
+      verseText: '',
+      observation: '',
+      teaching: '',
+      practicalApplication: '',
+      tagIds: '',
     },
   });
   
   useEffect(() => {
+    // This effect runs when the `entry` prop changes.
+    // `form.reset` updates all form fields with the new `entry` data.
+    // This is the correct React way to populate the form for editing.
     if (entry) {
+      const verseParts = entry.bibleVerse.split(' ').slice(1).join(' ').split(':');
       form.reset({
         bibleBook: entry.bibleBook || '',
         chapter: entry.chapter || undefined,
-        bibleVerse: entry.bibleVerse.split(' ').slice(1).join(' ').split(':').pop() || '',
+        bibleVerse: verseParts.length > 1 ? verseParts[1] : '',
         verseText: entry.verseText || '',
         observation: entry.observation || '',
         teaching: entry.teaching || '',
@@ -91,7 +95,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         tagIds: entry.tagIds?.join(', ') || '',
       });
     } else {
-       form.reset({
+       form.reset({ // Reset to empty if no entry is provided (for new entries)
         bibleBook: '',
         chapter: undefined,
         bibleVerse: '',
