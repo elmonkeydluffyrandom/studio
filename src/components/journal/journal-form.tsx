@@ -100,7 +100,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
        // Reset to empty if no entry is provided (for new entries)
        form.reset(defaultFormValues);
     }
-  }, [entry, form]);
+  }, [entry, form.reset]);
 
 
   const onSubmit = (data: JournalFormValues) => {
