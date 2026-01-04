@@ -31,14 +31,16 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         addBulkEntriesToPdf(doc, entries);
     }
     
-    const fullBibleVerse = entry?.bibleBook ? `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` : entry?.bibleVerse;
+    const fullBibleVerse = entry?.bibleVerse;
     const fileName = entry ? `${fullBibleVerse?.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
     doc.save(fileName);
   };
 
   const addSingleEntryToPdf = (doc: jsPDF, entry: JournalEntry) => {
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
+    const bottomMargin = 25; // Safe bottom margin
     let y = 40;
 
     // --- Header ---
@@ -72,22 +74,28 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     // --- Content ---
     const addSection = (label: string, text: string) => {
         if (!text) return;
-        if (y > 260) { // Add new page if content overflows
+
+        const titleHeight = 8;
+        const textLines = doc.splitTextToSize(text, pageWidth - (margin * 2));
+        const textHeight = textLines.length * 5;
+        const sectionHeight = titleHeight + textHeight + 12; // Title + text + padding
+
+        if (y + sectionHeight > pageHeight - bottomMargin) { // Check if section fits
             doc.addPage();
             y = 25;
         }
+        
         doc.setFont("times", "bold");
         doc.setFontSize(14);
         doc.setTextColor(headerColor); // Section title color
         doc.text(label, margin, y);
-        y += 8;
+        y += titleHeight;
 
         doc.setFont("times", "normal");
         doc.setFontSize(12);
         doc.setTextColor('#000000'); // Body text color
-        const lines = doc.splitTextToSize(text, pageWidth - (margin * 2));
-        doc.text(lines, margin, y);
-        y += (lines.length * 5) + 12; // Dynamic vertical space
+        doc.text(textLines, margin, y);
+        y += textHeight + 12; // Dynamic vertical space
     };
     
     addSection("Escritura (S - Scripture)", entry.verseText);
@@ -102,6 +110,9 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
   const addBulkEntriesToPdf = (doc: jsPDF, entries: JournalEntry[]) => {
     let y = 20;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const bottomMargin = 25;
+    
     const getTime = (date: any): number => {
       if (!date) return 0;
       if (typeof date.toMillis === 'function') return date.toMillis();
@@ -116,18 +127,43 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     y += 20;
 
     for (const currentEntry of sortedEntries) {
-        if (y > 250) { // Check for new page before adding new entry
+        const entryHeight = calculateEntryHeight(doc, currentEntry);
+        if (y + entryHeight > pageHeight - bottomMargin) { // Check for new page before adding new entry
             doc.addPage();
             y = 20;
         }
         y = addBulkEntryContent(doc, currentEntry, y);
     }
   }
+  
+  const calculateEntryHeight = (doc: jsPDF, entry: JournalEntry): number => {
+      const margin = 20;
+      const usableWidth = doc.internal.pageSize.getWidth() - margin * 2;
+      let height = 0;
+      
+      height += 16; // Header and date
+      
+      const addSectionHeight = (content: string) => {
+          if (!content) return;
+          height += 6; // Title
+          const splitContent = doc.splitTextToSize(content, usableWidth);
+          height += (splitContent.length * 5) + 8;
+      };
+
+      addSectionHeight(entry.observation);
+      addSectionHeight(entry.teaching);
+      height += 10; // Separator
+      
+      return height;
+  }
+
 
   const addBulkEntryContent = (doc: jsPDF, entry: JournalEntry, startY: number) => {
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
     const usableWidth = pageWidth - margin * 2;
+    const bottomMargin = 25;
     let y = startY;
 
     // --- Header for each entry ---
@@ -154,7 +190,13 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     // --- Body ---
     const addSection = (title: string, content: string) => {
       if (!content) return;
-      if (y > 260) { // Check for new page inside a long entry
+      
+      const titleHeight = 6;
+      const splitContent = doc.splitTextToSize(content, usableWidth);
+      const contentHeight = (splitContent.length * 5) + 8;
+      const sectionHeight = titleHeight + contentHeight;
+
+      if (y + sectionHeight > pageHeight - bottomMargin) { // Check for new page inside a long entry
           doc.addPage();
           y = 20;
       }
@@ -163,15 +205,14 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       doc.setFont('times', 'bold');
       doc.setFontSize(12);
       doc.text(title, margin, y);
-      y += 6;
+      y += titleHeight;
 
       doc.setTextColor('#1e293b'); // slate-800
       doc.setFont('times', 'normal');
       doc.setFontSize(12);
-      const splitContent = doc.splitTextToSize(content, usableWidth);
       doc.text(splitContent, margin, y);
 
-      y += (splitContent.length * 5) + 8;
+      y += contentHeight;
     };
     
     addSection('Observación', entry.observation);
