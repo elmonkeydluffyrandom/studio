@@ -60,7 +60,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const { user } = useFirestore();
+  const { user } = useUser();
   const firestore = useFirestore();
   const isEditing = !!entry;
 

@@ -35,6 +35,7 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
 
   React.useEffect(() => {
     // When the external 'value' prop changes, update Quill's content
+    // This is crucial for populating the editor when editing an existing entry
     if (quill && value !== quill.root.innerHTML) {
       // Use clipboard.convert to properly handle HTML string
       const delta = quill.clipboard.convert(value);
