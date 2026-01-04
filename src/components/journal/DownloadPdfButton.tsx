@@ -28,42 +28,28 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         }
     };
 
-  const addSingleEntryToPdf = async (doc: jsPDF, entry: JournalEntry) => {
-    // Temporarily add a class to the body to activate print styles
-    document.body.classList.add('print-mode');
-
+  const addSingleEntryToPdf = async (pdf: jsPDF, entry: JournalEntry) => {
+    // This function will now use html2canvas on the modal or detail page content
     const element = document.querySelector('.print-container-modal') ?? document.querySelector('.print-container');
     
     if (element) {
-        // We clone the node to avoid manipulating the original element
-        const clonedElement = element.cloneNode(true) as HTMLElement;
-        
-        // We need to append it to the body to make sure styles are applied
-        clonedElement.style.position = 'absolute';
-        clonedElement.style.left = '-9999px';
-        clonedElement.style.width = '210mm'; // A4 width
-        clonedElement.style.padding = '20mm'; // Standard margins
-        document.body.appendChild(clonedElement);
-
-
-        await html2canvas(clonedElement, {
+        await html2canvas(element as HTMLElement, {
             scale: 2, // Higher scale for better quality
             useCORS: true,
-            windowWidth: clonedElement.scrollWidth,
-            windowHeight: clonedElement.scrollHeight
+            windowWidth: element.scrollWidth,
+            windowHeight: element.scrollHeight,
         }).then(canvas => {
             const imgData = canvas.toDataURL('image/png');
-            const pdf = doc; // Use the passed doc instance
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
             const ratio = canvasHeight / canvasWidth;
-            const imgHeight = pdfWidth * ratio;
+            let imgHeight = pdfWidth * ratio;
             let heightLeft = imgHeight;
             let position = 0;
 
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
             heightLeft -= pdfHeight;
 
             while (heightLeft > 0) {
@@ -72,10 +58,6 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
                 heightLeft -= pdfHeight;
             }
-            
-            // Cleanup
-            document.body.removeChild(clonedElement);
-            document.body.classList.remove('print-mode');
         });
     }
   }
@@ -155,7 +137,6 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       if (!content) return;
       
       const titleHeight = 6;
-
       checkNewPage(titleHeight);
       doc.setTextColor('#334155'); // slate-700
       doc.setFont('times', 'bold');
@@ -163,35 +144,28 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       doc.text(title, margin, y);
       y += titleHeight;
       
-      doc.setTextColor('#1e293b'); // slate-800
-      doc.setFont('times', 'normal');
-      doc.setFontSize(12);
-      
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
       tempDiv.style.width = `${usableWidth}mm`;
       tempDiv.style.fontFamily = 'times';
       tempDiv.style.fontSize = '12pt';
+      tempDiv.style.color = '#1e293b';
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
+      tempDiv.style.textAlign = 'justify';
+      tempDiv.innerHTML = content; // Use innerHTML to parse b and i tags
       document.body.appendChild(tempDiv);
       
       await html2canvas(tempDiv, {
           scale: 2,
           windowWidth: tempDiv.scrollWidth,
-          windowHeight: tempDiv.scrollHeight
+          windowHeight: tempDiv.scrollHeight,
+          backgroundColor: null, // Transparent background
       }).then(canvas => {
           const imgData = canvas.toDataURL('image/png');
           const imgProps = doc.getImageProperties(imgData);
           const imgHeight = (imgProps.height * usableWidth) / imgProps.width;
 
-          if (checkNewPage(imgHeight)) {
-              // If new page was added, re-draw section title
-              doc.setTextColor('#334155');
-              doc.setFont('times', 'bold');
-              doc.setFontSize(12);
-              doc.text(title, margin, y-titleHeight);
-          }
+          checkNewPage(imgHeight);
           doc.addImage(imgData, 'PNG', margin, y, usableWidth, imgHeight);
           y += imgHeight;
       });
@@ -205,7 +179,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     await addSection('Aplicación Práctica', entry.practicalApplication);
     
     // --- Separator ---
-    if(!checkNewPage(10)) {
+    if(y < pageHeight - bottomMargin - 10) {
         doc.setDrawColor('#e2e8f0'); // slate-200
         doc.setLineWidth(0.3);
         doc.line(margin, y, pageWidth - margin, y);

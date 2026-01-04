@@ -31,10 +31,7 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
   }, [quill, onChange]);
 
   React.useEffect(() => {
-    if (quill && quill.root.innerHTML !== value) {
-      // Use dangerouslyPasteHTML to set the initial content.
-      // This is generally safer than directly manipulating innerHTML
-      // and is the recommended way for initial content in Quill.
+    if (quill && value && quill.root.innerHTML !== value) {
       const delta = quill.clipboard.convert(value);
       quill.setContents(delta, 'silent');
     }
