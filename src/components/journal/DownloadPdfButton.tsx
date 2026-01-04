@@ -74,13 +74,13 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     // --- Content ---
     const addSection = (label: string, text: string) => {
         if (!text) return;
+        const usableWidth = pageWidth - margin * 2;
+        const titleHeight = 10;
+        const textLineHeight = 7;
+        const sectionSpacing = 12;
 
-        const titleHeight = 8;
-        const textLines = doc.splitTextToSize(text, pageWidth - (margin * 2));
-        const textHeight = textLines.length * 5;
-        const sectionHeight = titleHeight + textHeight + 12; // Title + text + padding
-
-        if (y + sectionHeight > pageHeight - bottomMargin) { // Check if section fits
+        // Check if title fits, if not, new page
+        if (y + titleHeight > pageHeight - bottomMargin) {
             doc.addPage();
             y = 25;
         }
@@ -91,11 +91,22 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         doc.text(label, margin, y);
         y += titleHeight;
 
+        // Process and draw text line by line
+        const textLines = doc.splitTextToSize(text, usableWidth);
         doc.setFont("times", "normal");
         doc.setFontSize(12);
         doc.setTextColor('#000000'); // Body text color
-        doc.text(textLines, margin, y);
-        y += textHeight + 12; // Dynamic vertical space
+
+        textLines.forEach((line: string) => {
+            if (y + textLineHeight > pageHeight - bottomMargin) {
+                doc.addPage();
+                y = 25; 
+            }
+            doc.text(line, margin, y);
+            y += textLineHeight;
+        });
+
+        y += sectionSpacing; // Add space after the section
     };
     
     addSection("Escritura (S - Scripture)", entry.verseText);
@@ -192,11 +203,9 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       if (!content) return;
       
       const titleHeight = 6;
-      const splitContent = doc.splitTextToSize(content, usableWidth);
-      const contentHeight = (splitContent.length * 5) + 8;
-      const sectionHeight = titleHeight + contentHeight;
+      const textLineHeight = 7;
 
-      if (y + sectionHeight > pageHeight - bottomMargin) { // Check for new page inside a long entry
+      if (y + titleHeight > pageHeight - bottomMargin) {
           doc.addPage();
           y = 20;
       }
@@ -210,9 +219,18 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       doc.setTextColor('#1e293b'); // slate-800
       doc.setFont('times', 'normal');
       doc.setFontSize(12);
-      doc.text(splitContent, margin, y);
+      
+      const textLines = doc.splitTextToSize(content, usableWidth);
+      textLines.forEach((line: string) => {
+        if(y + textLineHeight > pageHeight - bottomMargin) {
+            doc.addPage();
+            y = 20;
+        }
+        doc.text(line, margin, y);
+        y += textLineHeight;
+      });
 
-      y += contentHeight;
+      y += 8; // spacing after section
     };
     
     addSection('Observación', entry.observation);
