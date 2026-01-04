@@ -1,52 +1,50 @@
 'use client';
 
-import React, { forwardRef } from 'react';
-import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
-
-// Dynamically import ReactQuill to avoid SSR issues
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+import React from 'react';
+import { useQuill } from 'react-quilljs';
+import 'quill/dist/quill.snow.css';
 
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  name?: string;
+  name?: string; // name is passed by react-hook-form Controller
 }
 
-export const RichTextEditor = forwardRef<typeof ReactQuill, RichTextEditorProps>(
-  ({ value, onChange, placeholder, name }, ref) => {
-    const modules = {
+export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) => {
+  const { quill, quillRef } = useQuill({
+    modules: {
       toolbar: [
         ['bold', 'italic'],
       ],
-    };
+    },
+    formats: ['bold', 'italic'],
+    placeholder,
+  });
 
-    const formats = [
-      'bold', 'italic',
-    ];
+  React.useEffect(() => {
+    if (quill) {
+      quill.on('text-change', () => {
+        onChange(quill.root.innerHTML);
+      });
+    }
+  }, [quill, onChange]);
 
-    return (
-      <div className="rich-text-editor bg-background">
-        <ReactQuill
-          // @ts-ignore
-          ref={ref}
-          theme="snow"
-          value={value}
-          onChange={onChange}
-          modules={modules}
-          formats={formats}
-          placeholder={placeholder}
-          // The name is passed to the underlying textarea for form handling
-          // but Quill doesn't directly use a "name" prop on the component itself.
-          // This is mostly for semantics and accessibility if needed.
-          // The `name` prop isn't standard for ReactQuill but doesn't hurt.
-          // We handle field registration via react-hook-form's Controller.
-          // name={name}
-        />
-      </div>
-    );
-  }
-);
+  React.useEffect(() => {
+    if (quill && quill.root.innerHTML !== value) {
+      // Use dangerouslyPasteHTML to set the initial content.
+      // This is generally safer than directly manipulating innerHTML
+      // and is the recommended way for initial content in Quill.
+      const delta = quill.clipboard.convert(value);
+      quill.setContents(delta, 'silent');
+    }
+  }, [quill, value]);
+
+  return (
+    <div className="rich-text-editor bg-background">
+      <div ref={quillRef} />
+    </div>
+  );
+};
 
 RichTextEditor.displayName = 'RichTextEditor';
