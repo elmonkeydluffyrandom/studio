@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
 import jsPDF from 'jspdf';
+import html2canvas from 'jspdf-html2canvas';
 import { Timestamp } from 'firebase/firestore';
 
 interface DownloadPdfButtonProps {
@@ -25,22 +26,30 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       format: 'a4',
     });
 
+    // Create a hidden element to render HTML for PDF conversion
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.width = '700px'; // A decent width for rendering
+    document.body.appendChild(container);
+
     if (entry) {
-        addSingleEntryToPdf(doc, entry);
+        await addSingleEntryToPdf(doc, entry, container);
     } else if (entries && entries.length > 0) {
-        addBulkEntriesToPdf(doc, entries);
+        // Bulk download needs a separate implementation with html2canvas
+        addBulkEntriesToPdf(doc, entries); // This remains as text-based for now
     }
     
+    document.body.removeChild(container);
+
     const fullBibleVerse = entry?.bibleVerse;
     const fileName = entry ? `${fullBibleVerse?.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
     doc.save(fileName);
   };
 
-  const addSingleEntryToPdf = (doc: jsPDF, entry: JournalEntry) => {
+  const addSingleEntryToPdf = async (doc: jsPDF, entry: JournalEntry, container: HTMLElement) => {
     const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
-    const bottomMargin = 25; // Safe bottom margin
     let y = 40;
 
     // --- Header ---
@@ -65,62 +74,94 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     }
     const dateStr = getDate(entry.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
     doc.text(dateStr, pageWidth / 2, 28, { align: 'center' });
-
-    // Reset text color for body
-    doc.setTextColor('#000000');
-    y = 55; // Start body content below the header
-
+    
+    y = 55;
 
     // --- Content ---
-    const addSection = (label: string, text: string) => {
-        if (!text) return;
+    const addSection = async (label: string, htmlContent: string) => {
+        if (!htmlContent) return;
         const usableWidth = pageWidth - margin * 2;
         const titleHeight = 10;
-        const textLineHeight = 7;
         const sectionSpacing = 12;
 
-        const checkNewPage = (neededHeight: number) => {
-            if (y + neededHeight > pageHeight - bottomMargin) {
-                doc.addPage();
-                y = 25;
-                return true;
-            }
-            return false;
-        };
-        
-        checkNewPage(titleHeight);
+        if (y + titleHeight > doc.internal.pageSize.getHeight() - 25) {
+            doc.addPage();
+            y = 20;
+        }
         
         doc.setFont("times", "bold");
         doc.setFontSize(14);
-        doc.setTextColor(headerColor); // Section title color
+        doc.setTextColor(headerColor);
         doc.text(label, margin, y);
         y += titleHeight;
+        
+        // Use html2canvas to render the HTML content
+        container.innerHTML = `<div style="font-family: 'Times New Roman', serif; font-size: 12pt; color: #000; width: ${usableWidth}mm;">${htmlContent}</div>`;
 
-        // Process and draw text line by line
-        const textLines = doc.splitTextToSize(text, usableWidth);
-        doc.setFont("times", "normal");
-        doc.setFontSize(12);
-        doc.setTextColor('#000000'); // Body text color
+        await html2canvas(container, {
+            useCORS: true,
+            scale: 2,
+            onclone: (clonedDoc) => {
+                // This ensures styles are applied correctly in the canvas
+                clonedDoc.body.style.fontFamily = "'Times New Roman', serif";
+            },
+        }).then((canvas) => {
+             const imgData = canvas.toDataURL('image/png');
+             const imgProps = doc.getImageProperties(imgData);
+             const imgHeight = (imgProps.height * usableWidth) / imgProps.width;
 
-        textLines.forEach((line: string) => {
-            checkNewPage(textLineHeight);
-            doc.text(line, margin, y);
-            y += textLineHeight;
+            if (y + imgHeight > doc.internal.pageSize.getHeight() - 25) {
+                doc.addPage();
+                y = 20;
+            }
+             
+            doc.addImage(imgData, 'PNG', margin, y, usableWidth, imgHeight, undefined, 'FAST');
+            y += imgHeight;
         });
 
-        y += sectionSpacing; // Add space after the section
+        y += sectionSpacing;
     };
     
-    addSection("Escritura (S - Scripture)", entry.verseText);
-    addSection("Observación (O - Observation)", entry.observation);
-    addSection("Enseñanza", entry.teaching);
-    addSection("Aplicación Práctica", entry.practicalApplication);
+    // Add scripture as plain text
+    doc.setFont("times", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(headerColor);
+    doc.text("Escritura (S - Scripture)", margin, y);
+    y += 10;
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor('#000000');
+    const textLines = doc.splitTextToSize(entry.verseText, pageWidth - margin * 2);
+    textLines.forEach((line: string) => {
+        if (y > doc.internal.pageSize.getHeight() - 25) {
+            doc.addPage();
+            y = 20;
+        }
+        doc.text(line, margin, y);
+        y += 7;
+    });
+    y += 12;
+
+    await addSection("Observación (O - Observation)", entry.observation);
+    await addSection("Enseñanza", entry.teaching);
+    await addSection("Aplicación Práctica", entry.practicalApplication);
 
     if(entry.tagIds && entry.tagIds.length > 0){
-      addSection('Etiquetas', entry.tagIds.join(', '));
+      // This will be plain text for now
+      y += 10;
+      doc.setFont("times", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(headerColor);
+      doc.text('Etiquetas', margin, y);
+      y += 8;
+      doc.setFont("times", "normal");
+      doc.setFontSize(12);
+      doc.setTextColor('#000000');
+      doc.text(entry.tagIds.join(', '), margin, y);
     }
   }
 
+  // NOTE: Bulk export does not support rich text formatting yet.
   const addBulkEntriesToPdf = (doc: jsPDF, entries: JournalEntry[]) => {
     let y = 20;
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -212,12 +253,14 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         y += titleHeight;
       }
       
-
       doc.setTextColor('#1e293b'); // slate-800
       doc.setFont('times', 'normal');
       doc.setFontSize(12);
       
-      const textLines = doc.splitTextToSize(content, usableWidth);
+      // For bulk export, we just strip HTML for now
+      const plainText = content.replace(/<[^>]+>/g, '');
+      const textLines = doc.splitTextToSize(plainText, usableWidth);
+
       textLines.forEach((line: string) => {
         checkNewPage(textLineHeight);
         doc.text(line, margin, y);
@@ -229,6 +272,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     
     addSection('Observación', entry.observation);
     addSection('Enseñanza', entry.teaching);
+    addSection('Aplicación Práctica', entry.practicalApplication);
     
     // --- Separator ---
     if(!checkNewPage(10)) {
@@ -240,6 +284,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
     return y;
   }
+
 
   return (
     <Button

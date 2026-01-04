@@ -48,23 +48,26 @@ export function ViewEntryModal({ entry, onClose, onEdit, onDeleteCompleted }: Vi
 
             <div className="print-section">
                 <h2 className="text-xl font-headline font-semibold print-section-title">Observación (O - Observation)</h2>
-                <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-                    {entry.observation}
-                </p>
+                 <div
+                    className="prose prose-sm md:prose-base dark:prose-invert max-w-none mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text"
+                    dangerouslySetInnerHTML={{ __html: entry.observation }}
+                 />
             </div>
             
             <div className="print-section">
                 <h2 className="text-xl font-headline font-semibold print-section-title">Enseñanza</h2>
-                <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-                    {entry.teaching}
-                </p>
+                 <div
+                    className="prose prose-sm md:prose-base dark:prose-invert max-w-none mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text"
+                    dangerouslySetInnerHTML={{ __html: entry.teaching }}
+                />
             </div>
 
             <div className="print-section">
                 <h2 className="text-xl font-headline font-semibold print-section-title">Aplicación Práctica</h2>
-                <p className="mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text">
-                    {entry.practicalApplication}
-                </p>
+                <div
+                    className="prose prose-sm md:prose-base dark:prose-invert max-w-none mt-2 text-foreground/90 whitespace-pre-wrap leading-relaxed print-text"
+                    dangerouslySetInnerHTML={{ __html: entry.practicalApplication }}
+                />
             </div>
 
             {(entry.tagIds && entry.tagIds.length > 0) && (

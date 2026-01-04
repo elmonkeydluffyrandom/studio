@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTransition } from 'react';
@@ -33,15 +33,16 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { RichTextEditor } from '../rich-text-editor';
 
 const FormSchema = z.object({
   bibleBook: z.string({ required_error: "Por favor selecciona un libro."}).min(1, 'El libro es requerido.'),
   chapter: z.coerce.number().min(1, 'El capítulo es requerido.'),
   bibleVerse: z.string().min(1, 'La cita es requerida (ej. 1-5).'),
   verseText: z.string().min(10, 'El texto del versículo es requerido.'),
-  observation: z.string().min(10, 'La observación es requerida.'),
-  teaching: z.string().min(10, 'La enseñanza es requerida.'),
-  practicalApplication: z.string().min(10, 'La aplicación práctica es requerida.'),
+  observation: z.string().min(15, 'La observación es requerida.'),
+  teaching: z.string().min(15, 'La enseñanza es requerida.'),
+  practicalApplication: z.string().min(15, 'La aplicación práctica es requerida.'),
   tagIds: z.string().optional(),
 });
 
@@ -65,7 +66,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     resolver: zodResolver(FormSchema),
     defaultValues: {
       bibleBook: entry?.bibleBook || '',
-      chapter: entry?.chapter || '',
+      chapter: entry?.chapter || undefined,
       bibleVerse: entry?.bibleVerse.split(':').pop() || '',
       verseText: entry?.verseText || '',
       observation: entry?.observation || '',
@@ -91,7 +92,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
         const entryData = {
           ...data,
-          bibleVerse: fullBibleVerse, // We're saving the full constructed verse
+          bibleVerse: fullBibleVerse,
           tagIds: tags,
         };
 
@@ -195,7 +196,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                 <FormItem className="sm:col-span-1">
                 <FormLabel>Capítulo</FormLabel>
                 <FormControl>
-                    <Input type="number" placeholder="Ej: 23" {...field} />
+                    <Input type="number" placeholder="Ej: 23" {...field} value={field.value ?? ''}/>
                 </FormControl>
                 <FormMessage />
                 </FormItem>
@@ -242,9 +243,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Observación (O - Observation)</FormLabel>
                 <FormControl>
-                <Textarea
+                <RichTextEditor
                     placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
-                    className="min-h-[120px]"
                     {...field}
                 />
                 </FormControl>
@@ -260,10 +260,9 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Enseñanza</FormLabel>
                 <FormControl>
-                <Textarea
+                <RichTextEditor
                     placeholder="¿Qué verdad espiritual, doctrina o principio eterno nos enseña este pasaje? ¿Qué aprendo sobre el carácter de Dios?"
-                    className="min-h-[120px]"
-                    {...field}
+                     {...field}
                 />
                 </FormControl>
                 <FormMessage />
@@ -278,9 +277,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Aplicación Práctica</FormLabel>
                 <FormControl>
-                <Textarea
+                <RichTextEditor
                     placeholder="¿Cómo puedo poner por obra esta enseñanza en mi vida hoy? Escribe acciones concretas, cambios de actitud o pasos de obediencia."
-                    className="min-h-[120px]"
                     {...field}
                 />
                 </FormControl>
