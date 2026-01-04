@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
 import jsPDF from 'jspdf';
-import html2canvas from 'jspdf-html2canvas';
+import html2canvas from 'html2canvas';
 import { Timestamp } from 'firebase/firestore';
 
 interface DownloadPdfButtonProps {
