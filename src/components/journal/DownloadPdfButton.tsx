@@ -14,7 +14,6 @@ interface DownloadPdfButtonProps {
 export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonProps) {
   
     const handleDownload = async () => {
-        // Activamos compresión nativa del PDF
         const pdf = new jsPDF({
             orientation: 'p',
             unit: 'mm',
@@ -41,8 +40,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         };
         const sortedEntries = [...entries].sort((a,b) => getTime(a.createdAt) - getTime(b.createdAt));
 
-        // Portada General
-        doc.setFillColor(15, 23, 42); // Azul oscuro (Slate 900)
+        // Portada
+        doc.setFillColor(15, 23, 42); 
         doc.rect(0, 0, 210, 297, 'F'); 
         
         doc.setTextColor(255, 255, 255);
@@ -57,24 +56,22 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     }
   
     const addEntryContent = async (doc: jsPDF, entry: JournalEntry, startY: number): Promise<number> => {
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
+        const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
         const headerHeight = 45;
         const margin = 20;
         const usableWidth = pageWidth - (margin * 2);
         
-        // --- 1. ENCABEZADO "DARK NAVY" ---
-        doc.setFillColor(30, 41, 59); // Slate 800
+        // --- 1. ENCABEZADO ---
+        doc.setFillColor(30, 41, 59); 
         doc.rect(0, 0, pageWidth, headerHeight, 'F'); 
 
-        // Título Principal
         doc.setTextColor(255, 255, 255);
         doc.setFont('times', 'bold');
         doc.setFontSize(24);
         const title = entry.bibleVerse || 'Sin Título';
         doc.text(title, pageWidth / 2, 22, { align: 'center' });
 
-        // Fecha
         const getDate = (date: any) => {
             if (!date) return new Date();
             return typeof date.toDate === 'function' ? date.toDate() : new Date(date);
@@ -85,28 +82,28 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(11);
-        doc.setTextColor(203, 213, 225); // Slate 300
+        doc.setTextColor(203, 213, 225); 
         doc.text(dateStr.charAt(0).toUpperCase() + dateStr.slice(1), pageWidth / 2, 32, { align: 'center' });
 
         let y = headerHeight + 12; 
 
-        // --- HELPER MAESTRO: CORTE + COMPRESIÓN JPEG ---
+        // --- HELPER CON CORTE INTELIGENTE ---
         const addSection = async (sectionTitle: string, content: string, isPlain: boolean = false) => {
             if (!content) return;
 
-            // 1. Título de la Sección
+            // Título
             if (y + 15 > pageHeight - margin) {
                 doc.addPage();
                 y = margin;
             }
 
-            doc.setTextColor(15, 23, 42); // Slate 900
+            doc.setTextColor(15, 23, 42); 
             doc.setFont('times', 'bold');
             doc.setFontSize(13);
             doc.text(sectionTitle, margin, y);
             y += 4; 
 
-            // 2. Preparar Contenido Continuo
+            // Renderizar Contenido
             const tempContainer = document.createElement('div');
             tempContainer.style.width = `${usableWidth}mm`; 
             tempDivStyles(tempContainer);
@@ -118,26 +115,25 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 tempContainer.innerHTML = content;
             }
 
-            // Inyectar en DOM
             tempContainer.style.position = 'absolute';
             tempContainer.style.left = '-9999px';
             tempContainer.style.top = '0';
             document.body.appendChild(tempContainer);
 
-            // 3. Generar Canvas Gigante (OPTIMIZADO: Escala 2.5 y Fondo Blanco)
+            // Generar Canvas
             const canvas = await html2canvas(tempContainer, {
-                scale: 2.5, // 2.5 es suficiente para leer bien y pesa la mitad que 4
-                backgroundColor: '#ffffff', // Fondo blanco para que el JPEG no salga negro
+                scale: 2.5, 
+                backgroundColor: '#ffffff',
                 logging: false,
             });
             document.body.removeChild(tempContainer);
 
-            // 4. Lógica de "Rebanado" (Slicing) con Compresión JPEG
-            const imgDataFull = canvas; // Canvas fuente
+            const imgDataFull = canvas;
             const srcWidth = imgDataFull.width;
             const srcHeight = imgDataFull.height;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true }); // Optimización para leer pixeles
             
-            // Altura total en el PDF (mm)
+            // Altura total en PDF (mm)
             const pdfTotalHeight = (srcHeight * usableWidth) / srcWidth;
             
             let heightLeftInPdfMm = pdfTotalHeight; 
@@ -145,50 +141,81 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             const pxPerMm = srcWidth / usableWidth;
 
             while (heightLeftInPdfMm > 0) {
-                const spaceOnPage = pageHeight - margin - y;
+                const spaceOnPageMm = pageHeight - margin - y;
                 
-                // Cortamos lo que quepa
-                const sliceHeightMm = Math.min(heightLeftInPdfMm, spaceOnPage);
-                
-                // Evitar tiritas minúsculas
-                if (sliceHeightMm < 5 && heightLeftInPdfMm > 5) {
+                // 1. Calculamos dónde DEBERÍAMOS cortar
+                let sliceHeightMm = Math.min(heightLeftInPdfMm, spaceOnPageMm);
+                let sliceHeightPx = sliceHeightMm * pxPerMm;
+
+                // 2. CORTE INTELIGENTE: Si vamos a cortar a la mitad (y no es el final), buscamos un espacio en blanco
+                if (heightLeftInPdfMm > spaceOnPageMm && ctx) {
+                    const searchZoneHeightPx = 50 * 2.5; // Buscar hasta 50px hacia arriba (aprox 1-2 líneas)
+                    const checkStartY = currentSrcY + sliceHeightPx;
+                    
+                    // Escanear hacia arriba buscando una fila blanca
+                    for (let offset = 0; offset < searchZoneHeightPx; offset++) {
+                        const testY = Math.floor(checkStartY - offset);
+                        if (testY <= currentSrcY) break; // No subir más allá del inicio
+
+                        // Obtener una línea de pixeles
+                        const pixelRow = ctx.getImageData(0, testY, srcWidth, 1).data;
+                        let isWhiteRow = true;
+                        
+                        // Chequear cada pixel de la fila (saltando de 10 en 10 para velocidad)
+                        for (let p = 0; p < pixelRow.length; p += 40) { 
+                            const r = pixelRow[p];
+                            const g = pixelRow[p+1];
+                            const b = pixelRow[p+2];
+                            // Si no es blanco puro (permitiendo un poco de antialiasing), detectamos texto
+                            if (r < 250 || g < 250 || b < 250) {
+                                isWhiteRow = false;
+                                break;
+                            }
+                        }
+
+                        if (isWhiteRow) {
+                            // ¡Encontramos un hueco! Cortamos aquí
+                            sliceHeightPx = testY - currentSrcY;
+                            sliceHeightMm = sliceHeightPx / pxPerMm;
+                            break;
+                        }
+                    }
+                }
+
+                // Evitar cortes microscópicos si algo falla
+                if (sliceHeightMm < 2 && heightLeftInPdfMm > 5) {
                     doc.addPage();
                     y = margin;
                     continue;
                 }
 
-                // Altura del corte en PX
-                const sliceHeightPx = sliceHeightMm * pxPerMm;
-
-                // Canvas temporal para el trozo
+                // 3. Crear el trozo
                 const sliceCanvas = document.createElement('canvas');
                 sliceCanvas.width = srcWidth;
                 sliceCanvas.height = sliceHeightPx;
                 
-                const ctx = sliceCanvas.getContext('2d');
-                if (ctx) {
-                    // Rellenar de blanco por si acaso (JPEG no tiene transparencia)
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                const sliceCtx = sliceCanvas.getContext('2d');
+                if (sliceCtx) {
+                    sliceCtx.fillStyle = '#ffffff';
+                    sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
                     
-                    ctx.drawImage(
+                    sliceCtx.drawImage(
                         imgDataFull, 
-                        0, currentSrcY, srcWidth, sliceHeightPx, // Origen
-                        0, 0, srcWidth, sliceHeightPx            // Destino
+                        0, currentSrcY, srcWidth, sliceHeightPx, 
+                        0, 0, srcWidth, sliceHeightPx            
                     );
                 }
 
-                // *** AQUÍ ESTÁ LA MAGIA DEL PESO ***
-                // Convertimos el trozo a JPEG calidad 0.8
-                const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.8);
+                const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.85); // JPEG Calidad 85%
                 
                 doc.addImage(sliceImgData, 'JPEG', margin, y, usableWidth, sliceHeightMm);
                 
                 y += sliceHeightMm;
                 currentSrcY += sliceHeightPx;
-                heightLeftInPdfMm -= sliceHeightMm;
+                heightLeftInPdfMm = Math.max(0, heightLeftInPdfMm - sliceHeightMm); // Evitar negativos
 
-                if (heightLeftInPdfMm > 0.1) { 
+                // Si aún queda contenido, añadimos página
+                if (heightLeftInPdfMm > 0.5) { 
                     doc.addPage();
                     y = margin;
                 }
@@ -205,13 +232,12 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         return y;
     }
 
-    // --- ESTILOS ---
     const tempDivStyles = (div: HTMLElement) => {
         div.style.padding = '10px'; 
         div.style.boxSizing = 'border-box';
         div.style.fontFamily = '"Times New Roman", Times, serif';
         div.style.fontSize = '12pt';
-        div.style.color = '#000000'; // Negro puro
+        div.style.color = '#000000'; 
         div.style.textAlign = 'justify';
         div.style.lineHeight = '1.5';
         div.style.marginBottom = '0px'; 
