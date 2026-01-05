@@ -2,11 +2,11 @@
 
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
-import { useState } from 'react'; // Agregamos estado para loading
+import { useState } from 'react'; 
 import type { JournalEntry } from '@/lib/types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { useToast } from '@/hooks/use-toast'; // Importar toast para errores
+import { useToast } from '@/hooks/use-toast'; 
 
 interface DownloadPdfButtonProps {
   entry?: JournalEntry;
@@ -20,8 +20,6 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     const handleDownload = async () => {
         try {
             setIsGenerating(true);
-            
-            // Pausa pequeña para que la UI se actualice y muestre el spinner
             await new Promise(resolve => setTimeout(resolve, 100));
 
             const pdf = new jsPDF({
@@ -40,9 +38,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 await addBulkEntriesToPdf(pdf, entries);
             }
 
-            // --- TRUCO PARA MÓVILES (Blob Download) ---
-            // Guardar directamente suele fallar en Android/iOS PWAs.
-            // Es mejor generar un BLOB y forzar el clic en un enlace.
+            // Descarga compatible con móviles (Blob)
             const pdfBlob = pdf.output('blob');
             const url = URL.createObjectURL(pdfBlob);
             const link = document.createElement('a');
@@ -51,7 +47,6 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             document.body.appendChild(link);
             link.click();
             
-            // Limpieza
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
@@ -62,7 +57,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             toast({ 
                 variant: "destructive", 
                 title: "Error", 
-                description: "No se pudo generar el PDF. Intenta con una entrada más corta o reinicia la app." 
+                description: "Hubo un problema al generar el PDF. Intenta de nuevo." 
             });
         } finally {
             setIsGenerating(false);
@@ -138,7 +133,9 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             doc.setFont('times', 'bold');
             doc.setFontSize(13);
             doc.text(sectionTitle, margin, y);
-            y += 4; 
+            
+            // AJUSTE 1: Reducimos el espacio entre Título y Texto (Antes era 4)
+            y += 2; 
 
             // Renderizar Contenido
             const tempContainer = document.createElement('div');
@@ -157,9 +154,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             tempContainer.style.top = '0';
             document.body.appendChild(tempContainer);
 
-            // OPTIMIZACIÓN MÓVIL: Escala reducida a 2 para evitar crash de memoria
             const canvas = await html2canvas(tempContainer, {
-                scale: 2, // Antes 2.5. '2' es mucho más seguro en celulares.
+                scale: 2, 
                 backgroundColor: '#ffffff',
                 logging: false,
             });
@@ -178,13 +174,12 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
             while (heightLeftInPdfMm > 0) {
                 const spaceOnPageMm = pageHeight - margin - y;
-                
                 let sliceHeightMm = Math.min(heightLeftInPdfMm, spaceOnPageMm);
                 let sliceHeightPx = sliceHeightMm * pxPerMm;
 
                 // CORTE INTELIGENTE
                 if (heightLeftInPdfMm > spaceOnPageMm && ctx) {
-                    const searchZoneHeightPx = 50 * 2; // Ajustado a escala 2
+                    const searchZoneHeightPx = 50 * 2; 
                     const checkStartY = currentSrcY + sliceHeightPx;
                     
                     for (let offset = 0; offset < searchZoneHeightPx; offset++) {
@@ -231,7 +226,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                     );
                 }
 
-                const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.80); // JPEG un poco más comprimido
+                const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.80); 
                 
                 doc.addImage(sliceImgData, 'JPEG', margin, y, usableWidth, sliceHeightMm);
                 
@@ -245,7 +240,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 }
             }
 
-            y += 8;
+            // AJUSTE 2: Aumentamos el espacio entre el final del texto y el SIGUIENTE título (Antes era 8)
+            y += 15;
         };
 
         await addSection('Escritura (S - Scripture)', entry.verseText, true);
@@ -257,7 +253,10 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     }
 
     const tempDivStyles = (div: HTMLElement) => {
-        div.style.padding = '10px'; 
+        // AJUSTE 3: Padding superior reducido a 2px para "acercar" visualmente el texto al título
+        // Mantenemos 10px a los lados para evitar cortes.
+        // Mantenemos 5px abajo para los "rabitos" de las letras (g, j, p).
+        div.style.padding = '2px 10px 5px 10px'; 
         div.style.boxSizing = 'border-box';
         div.style.fontFamily = '"Times New Roman", Times, serif';
         div.style.fontSize = '12pt';
