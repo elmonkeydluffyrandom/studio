@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useEffect, useTransition } from 'react';
@@ -35,6 +35,7 @@ import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
+// Importación dinámica del editor
 const RichTextEditor = dynamic(() => import('../rich-text-editor').then((mod) => mod.RichTextEditor), { ssr: false });
 
 const FormSchema = z.object({
@@ -80,109 +81,121 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     defaultValues: defaultFormValues,
   });
   
+  // Efecto estándar de React Hook Form
   useEffect(() => {
-    // When the `entry` prop changes, reset the form with the new data.
-    // This correctly populates the form for editing.
     if (entry) {
-      console.log('Cargando datos en editor...', entry);
-      const verseParts = entry.bibleVerse.split(' ').slice(1).join(' ').split(':');
-      form.reset({
-        bibleBook: entry.bibleBook || '',
-        chapter: entry.chapter || undefined,
-        bibleVerse: verseParts.length > 1 ? verseParts[1] : '',
-        verseText: entry.verseText || '',
-        observation: entry.observation || '',
-        teaching: entry.teaching || '',
-        practicalApplication: entry.practicalApplication || '',
-        tagIds: entry.tagIds?.join(', ') || '',
-      });
+      console.log('Cargando datos básicos...', entry);
+      
+      // 1. Lógica más segura para extraer solo los números del versículo
+      // Si la cita es "Génesis 1:1-5", esto separa por ":" y toma lo último ("1-5")
+      const parts = entry.bibleVerse.split(':');
+      const verseOnly = parts.length > 1 ? parts[parts.length - 1] : '';
+
+      // 2. Usamos setValue para forzar que cada campo tenga su dato
+      form.setValue('bibleBook', entry.bibleBook || '');
+      form.setValue('chapter', Number(entry.chapter)); // Aseguramos que sea número
+      form.setValue('bibleVerse', verseOnly);
+      form.setValue('verseText', entry.verseText || '');
+      form.setValue('tagIds', entry.tagIds?.join(', ') || '');
+      
+      // También actualizamos el estado interno de los campos ricos
+      form.setValue('observation', entry.observation || '');
+      form.setValue('teaching', entry.teaching || '');
+      form.setValue('practicalApplication', entry.practicalApplication || '');
+
     } else {
-       // Reset to empty if no entry is provided (for new entries)
+       // Si es nueva entrada, limpiar todo
        form.reset(defaultFormValues);
     }
-  }, [entry, form.reset]);
+  }, [entry, form.setValue, form.reset]);
+
+  // --- SOLUCIÓN MANUAL DE INYECCIÓN ---
+  useEffect(() => {
+    if (entry) {
+      // Esperamos un momento a que el editor se renderice
+      const timer = setTimeout(() => {
+        // Función auxiliar para inyectar texto
+        const injectText = (containerId: string, text: string) => {
+          const container = document.getElementById(containerId);
+          if (container) {
+            // Buscamos el div editable DENTRO de nuestro contenedor
+            const editableDiv = container.querySelector('[contenteditable="true"]');
+            if (editableDiv) {
+              editableDiv.innerHTML = text;
+            }
+          }
+        };
+
+        if (entry.observation) injectText('wrapper-observation', entry.observation);
+        if (entry.teaching) injectText('wrapper-teaching', entry.teaching);
+        if (entry.practicalApplication) injectText('wrapper-application', entry.practicalApplication);
+        
+        console.log("Inyección manual completada.");
+      }, 800); // 800ms de espera para asegurar carga
+
+      return () => clearTimeout(timer);
+    }
+  }, [entry]);
 
 
   const onSubmit = (data: JournalFormValues) => {
     if (!user || !firestore) {
-        toast({
-            variant: 'destructive',
-            title: 'Error de autenticación',
-            description: 'Debes iniciar sesión para guardar una entrada.',
-        });
+        toast({ variant: 'destructive', title: 'Error', description: 'Debes iniciar sesión.' });
         return;
     }
+
+    // --- EXTRACCIÓN MANUAL DE DATOS (El "Puente" de Guardado) ---
+    // Leemos directamente del HTML lo que el usuario escribió
+    const getManualContent = (wrapperId: string, fallback: string) => {
+        const wrapper = document.getElementById(wrapperId);
+        const editable = wrapper?.querySelector('[contenteditable="true"]');
+        // Si encontramos el div editable, devolvemos su HTML (lo que se ve). Si no, usamos el fallback.
+        return editable ? editable.innerHTML : fallback;
+    };
+
+    // Sobrescribimos los datos del formulario con los visuales
+    const finalObservation = getManualContent('wrapper-observation', data.observation);
+    const finalTeaching = getManualContent('wrapper-teaching', data.teaching);
+    const finalApplication = getManualContent('wrapper-application', data.practicalApplication);
+    // ------------------------------------------------------------
 
     startTransition(() => {
         const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
         const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
-
-        const entryData = {
-          ...data,
-          bibleVerse: fullBibleVerse,
-          tagIds: tags,
+        
+        // Usamos las variables "final..." que acabamos de leer
+        const entryData = { 
+            ...data, 
+            bibleVerse: fullBibleVerse, 
+            tagIds: tags,
+            observation: finalObservation,        // <--- Dato visual real
+            teaching: finalTeaching,              // <--- Dato visual real
+            practicalApplication: finalApplication // <--- Dato visual real
         };
 
         if (isEditing && entry?.id) {
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-            setDoc(entryRef, {
-                ...entryData,
-                updatedAt: Timestamp.now()
-            }, { merge: true }).catch(error => {
-                console.error("Error updating entry:", error);
-                if (error.code === 'permission-denied') {
-                    const permissionError = new FirestorePermissionError({
-                        path: entryRef.path,
-                        operation: 'update',
-                        requestResourceData: entryData,
-                    });
-                    errorEmitter.emit('permission-error', permissionError);
-                } else {
-                   toast({
-                    variant: 'destructive',
-                    title: 'Error al actualizar',
-                    description: error.message || 'No se pudo guardar la entrada.',
-                    });
-                }
+            setDoc(entryRef, { ...entryData, updatedAt: Timestamp.now() }, { merge: true })
+            .then(() => {
+                toast({ title: 'Actualizado', description: 'Entrada guardada.' });
+                if (onSave) onSave();
+                router.refresh();
+            })
+            .catch((error) => {
+                console.error("Error updating:", error);
+                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar.' });
             });
-            
-            toast({
-              title: 'Entrada actualizada',
-              description: 'Tu entrada ha sido guardada exitosamente.',
-            });
-            if (onSave) onSave();
-            router.refresh();
-
         } else {
             const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-            const newEntry = {
-              ...entryData,
-              createdAt: Timestamp.now(),
-            };
-            
-            addDoc(entriesCollection, newEntry).then(docRef => {
-                toast({
-                    title: 'Entrada creada',
-                    description: 'Tu nueva entrada ha sido guardada.',
-                });
+            addDoc(entriesCollection, { ...entryData, createdAt: Timestamp.now() })
+            .then(() => {
+                toast({ title: 'Creado', description: 'Entrada guardada.' });
                 if (onSave) onSave();
                 else router.push(`/`);
-            }).catch(error => {
-                console.error("Error creating entry:", error);
-                if (error.code === 'permission-denied') {
-                    const permissionError = new FirestorePermissionError({
-                        path: entriesCollection.path,
-                        operation: 'create',
-                        requestResourceData: newEntry,
-                    });
-                    errorEmitter.emit('permission-error', permissionError);
-                } else {
-                   toast({
-                    variant: 'destructive',
-                    title: 'Error al crear',
-                    description: error.message || 'No se pudo guardar la entrada.',
-                    });
-                }
+            })
+            .catch((error) => {
+                console.error("Error creating:", error);
+                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear.' });
             });
         }
     });
@@ -193,13 +206,18 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
         <div className="grid grid-cols-1 sm:grid-cols-6 sm:gap-4 space-y-6 sm:space-y-0">
-            <FormField
+        <FormField
             control={form.control}
             name="bibleBook"
             render={({ field }) => (
                 <FormItem className="sm:col-span-3">
                 <FormLabel>Libro</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value || ""} value={field.value || ""}>
+                {/* TRUCO: La 'key' obliga al componente a actualizarse cuando llega el dato */}
+                <Select 
+                    key={field.value} 
+                    onValueChange={field.onChange} 
+                    defaultValue={field.value}
+                >
                     <FormControl>
                     <SelectTrigger>
                         <SelectValue placeholder="Selecciona un libro..." />
@@ -263,6 +281,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             )}
         />
 
+        {/* CAMPOS CON WRAPPER PARA INYECCIÓN MANUAL */}
+        
         <FormField
             control={form.control}
             name="observation"
@@ -270,10 +290,13 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Observación (O - Observation)</FormLabel>
                 <FormControl>
-                <RichTextEditor
-                    placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
-                    {...field}
-                />
+                {/* Wrapper ID para encontrarlo desde JS */}
+                <div id="wrapper-observation">
+                    <RichTextEditor
+                        placeholder="¿Qué dice el texto?..."
+                        {...field}
+                    />
+                </div>
                 </FormControl>
                 <FormMessage />
             </FormItem>
@@ -287,10 +310,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Enseñanza</FormLabel>
                 <FormControl>
-                <RichTextEditor
-                    placeholder="¿Qué verdad espiritual, doctrina o principio eterno nos enseña este pasaje? ¿Qué aprendo sobre el carácter de Dios?"
-                     {...field}
-                />
+                <div id="wrapper-teaching">
+                    <RichTextEditor
+                        placeholder="¿Qué verdad espiritual..."
+                        {...field}
+                    />
+                </div>
                 </FormControl>
                 <FormMessage />
             </FormItem>
@@ -304,10 +329,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Aplicación Práctica</FormLabel>
                 <FormControl>
-                <RichTextEditor
-                    placeholder="¿Cómo puedo poner por obra esta enseñanza en mi vida hoy? Escribe acciones concretas, cambios de actitud o pasos de obediencia."
-                    {...field}
-                />
+                <div id="wrapper-application">
+                    <RichTextEditor
+                        placeholder="¿Cómo puedo poner por obra..."
+                        {...field}
+                    />
+                </div>
                 </FormControl>
                 <FormMessage />
             </FormItem>
@@ -328,6 +355,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             </FormItem>
             )}
         />
+
         <div className="flex justify-end gap-2">
             {isModal ? (
                 <Button type="button" variant="outline" onClick={onSave}>

@@ -152,6 +152,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
       tempDiv.style.textAlign = 'justify';
+      tempDiv.style.lineHeight = '1.5';
       tempDiv.innerHTML = content; // Use innerHTML to parse b and i tags
       document.body.appendChild(tempDiv);
       
