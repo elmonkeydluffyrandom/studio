@@ -5,7 +5,6 @@ import { Download } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Timestamp } from 'firebase/firestore';
 
 interface DownloadPdfButtonProps {
   entry?: JournalEntry;
@@ -15,191 +14,218 @@ interface DownloadPdfButtonProps {
 export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonProps) {
   
     const handleDownload = async () => {
-        const pdf = new jsPDF('p', 'mm', 'a4');
+        // Activamos compresión nativa del PDF
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4',
+            compress: true
+        }); 
+        
         if (entry) {
-            await addSingleEntryToPdf(pdf, entry);
-            const fullBibleVerse = entry?.bibleVerse;
-            const fileName = entry ? `${fullBibleVerse?.replace(/ /g, '_').replace(/:/g, '-')}.pdf` : 'BibliaDiario_Export.pdf';
+            await addEntryContent(pdf, entry, 0); 
+            const fileName = `${(entry.bibleVerse || 'entrada').replace(/ /g, '_').replace(/:/g, '-')}.pdf`;
             pdf.save(fileName);
-
         } else if (entries && entries.length > 0) {
             await addBulkEntriesToPdf(pdf, entries);
-            pdf.save('BibliaDiario_Export.pdf');
+            pdf.save('Mi_Diario_Biblico.pdf');
         }
     };
 
-  const addSingleEntryToPdf = async (pdf: jsPDF, entry: JournalEntry) => {
-    // This function will now use html2canvas on the modal or detail page content
-    const element = document.querySelector('.print-container-modal') ?? document.querySelector('.print-container');
-    
-    if (element) {
-        await html2canvas(element as HTMLElement, {
-            scale: 2, // Higher scale for better quality
-            useCORS: true,
-            windowWidth: element.scrollWidth,
-            windowHeight: element.scrollHeight,
-        }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasWidth = canvas.width;
-            const canvasHeight = canvas.height;
-            const ratio = canvasHeight / canvasWidth;
-            let imgHeight = pdfWidth * ratio;
-            let heightLeft = imgHeight;
-            let position = 0;
+    const addBulkEntriesToPdf = async (doc: jsPDF, entries: JournalEntry[]) => {
+        const getTime = (date: any): number => {
+            if (!date) return 0;
+            if (typeof date.toMillis === 'function') return date.toMillis();
+            if (date.seconds) return date.seconds * 1000;
+            return new Date(date).getTime();
+        };
+        const sortedEntries = [...entries].sort((a,b) => getTime(a.createdAt) - getTime(b.createdAt));
 
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pdfHeight;
-            }
-        });
-    }
-  }
-
-
-  const addBulkEntriesToPdf = async (doc: jsPDF, entries: JournalEntry[]) => {
-    let y = 20;
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const bottomMargin = 25;
-    
-    const getTime = (date: any): number => {
-      if (!date) return 0;
-      if (typeof date.toMillis === 'function') return date.toMillis();
-      if (date.seconds) return date.seconds * 1000;
-      return new Date(date).getTime();
-    };
-    const sortedEntries = [...entries].sort((a,b) => getTime(a.createdAt) - getTime(b.createdAt));
-
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.text("Mi Diario Bíblico", 20, y);
-    y += 20;
-
-    for (const currentEntry of sortedEntries) {
-        const checkAndAddPage = () => {
-             if (y + 20 > pageHeight - bottomMargin) { // Minimal check before adding new entry
-                doc.addPage();
-                y = 20;
-            }
+        // Portada General
+        doc.setFillColor(15, 23, 42); // Azul oscuro (Slate 900)
+        doc.rect(0, 0, 210, 297, 'F'); 
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('times', 'bold');
+        doc.setFontSize(36);
+        doc.text("Mi Diario Bíblico", 105, 140, { align: 'center' });
+        
+        for (const currentEntry of sortedEntries) {
+            doc.addPage(); 
+            await addEntryContent(doc, currentEntry, 0);
         }
-        checkAndAddPage();
-        y = await addBulkEntryContent(doc, currentEntry, y);
     }
-  }
   
-  const addBulkEntryContent = async (doc: jsPDF, entry: JournalEntry, startY: number): Promise<number> => {
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const usableWidth = pageWidth - margin * 2;
-    const bottomMargin = 25;
-    let y = startY;
+    const addEntryContent = async (doc: jsPDF, entry: JournalEntry, startY: number): Promise<number> => {
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const headerHeight = 45;
+        const margin = 20;
+        const usableWidth = pageWidth - (margin * 2);
+        
+        // --- 1. ENCABEZADO "DARK NAVY" ---
+        doc.setFillColor(30, 41, 59); // Slate 800
+        doc.rect(0, 0, pageWidth, headerHeight, 'F'); 
 
-    const checkNewPage = (neededHeight: number) => {
-      if (y + neededHeight > pageHeight - bottomMargin) {
-        doc.addPage();
-        y = 20;
-        return true;
-      }
-      return false;
+        // Título Principal
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('times', 'bold');
+        doc.setFontSize(24);
+        const title = entry.bibleVerse || 'Sin Título';
+        doc.text(title, pageWidth / 2, 22, { align: 'center' });
+
+        // Fecha
+        const getDate = (date: any) => {
+            if (!date) return new Date();
+            return typeof date.toDate === 'function' ? date.toDate() : new Date(date);
+        }
+        const dateStr = getDate(entry.createdAt).toLocaleDateString('es-ES', { 
+            year: 'numeric', month: 'long', day: 'numeric' 
+        });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(203, 213, 225); // Slate 300
+        doc.text(dateStr.charAt(0).toUpperCase() + dateStr.slice(1), pageWidth / 2, 32, { align: 'center' });
+
+        let y = headerHeight + 12; 
+
+        // --- HELPER MAESTRO: CORTE + COMPRESIÓN JPEG ---
+        const addSection = async (sectionTitle: string, content: string, isPlain: boolean = false) => {
+            if (!content) return;
+
+            // 1. Título de la Sección
+            if (y + 15 > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+            }
+
+            doc.setTextColor(15, 23, 42); // Slate 900
+            doc.setFont('times', 'bold');
+            doc.setFontSize(13);
+            doc.text(sectionTitle, margin, y);
+            y += 4; 
+
+            // 2. Preparar Contenido Continuo
+            const tempContainer = document.createElement('div');
+            tempContainer.style.width = `${usableWidth}mm`; 
+            tempDivStyles(tempContainer);
+
+            if (isPlain) {
+                const paragraphs = content.split('\n').filter(p => p.trim());
+                tempContainer.innerHTML = paragraphs.map(p => `<p>${p}</p>`).join('');
+            } else {
+                tempContainer.innerHTML = content;
+            }
+
+            // Inyectar en DOM
+            tempContainer.style.position = 'absolute';
+            tempContainer.style.left = '-9999px';
+            tempContainer.style.top = '0';
+            document.body.appendChild(tempContainer);
+
+            // 3. Generar Canvas Gigante (OPTIMIZADO: Escala 2.5 y Fondo Blanco)
+            const canvas = await html2canvas(tempContainer, {
+                scale: 2.5, // 2.5 es suficiente para leer bien y pesa la mitad que 4
+                backgroundColor: '#ffffff', // Fondo blanco para que el JPEG no salga negro
+                logging: false,
+            });
+            document.body.removeChild(tempContainer);
+
+            // 4. Lógica de "Rebanado" (Slicing) con Compresión JPEG
+            const imgDataFull = canvas; // Canvas fuente
+            const srcWidth = imgDataFull.width;
+            const srcHeight = imgDataFull.height;
+            
+            // Altura total en el PDF (mm)
+            const pdfTotalHeight = (srcHeight * usableWidth) / srcWidth;
+            
+            let heightLeftInPdfMm = pdfTotalHeight; 
+            let currentSrcY = 0; 
+            const pxPerMm = srcWidth / usableWidth;
+
+            while (heightLeftInPdfMm > 0) {
+                const spaceOnPage = pageHeight - margin - y;
+                
+                // Cortamos lo que quepa
+                const sliceHeightMm = Math.min(heightLeftInPdfMm, spaceOnPage);
+                
+                // Evitar tiritas minúsculas
+                if (sliceHeightMm < 5 && heightLeftInPdfMm > 5) {
+                    doc.addPage();
+                    y = margin;
+                    continue;
+                }
+
+                // Altura del corte en PX
+                const sliceHeightPx = sliceHeightMm * pxPerMm;
+
+                // Canvas temporal para el trozo
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = srcWidth;
+                sliceCanvas.height = sliceHeightPx;
+                
+                const ctx = sliceCanvas.getContext('2d');
+                if (ctx) {
+                    // Rellenar de blanco por si acaso (JPEG no tiene transparencia)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                    
+                    ctx.drawImage(
+                        imgDataFull, 
+                        0, currentSrcY, srcWidth, sliceHeightPx, // Origen
+                        0, 0, srcWidth, sliceHeightPx            // Destino
+                    );
+                }
+
+                // *** AQUÍ ESTÁ LA MAGIA DEL PESO ***
+                // Convertimos el trozo a JPEG calidad 0.8
+                const sliceImgData = sliceCanvas.toDataURL('image/jpeg', 0.8);
+                
+                doc.addImage(sliceImgData, 'JPEG', margin, y, usableWidth, sliceHeightMm);
+                
+                y += sliceHeightMm;
+                currentSrcY += sliceHeightPx;
+                heightLeftInPdfMm -= sliceHeightMm;
+
+                if (heightLeftInPdfMm > 0.1) { 
+                    doc.addPage();
+                    y = margin;
+                }
+            }
+
+            y += 8;
+        };
+
+        await addSection('Escritura (S - Scripture)', entry.verseText, true);
+        await addSection('Observación (O - Observation)', entry.observation);
+        await addSection('Enseñanza', entry.teaching);
+        await addSection('Aplicación Práctica', entry.practicalApplication);
+
+        return y;
     }
 
-    // --- Header for each entry ---
-    checkNewPage(16); // Header height
-    const headerColor = '#1e293b'; // slate-800
-    doc.setFont('times', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(headerColor);
-    const fullBibleVerse = entry.bibleVerse;
-    doc.text(fullBibleVerse, margin, y);
-    y += 8;
-
-    const getDate = (date: Date | Timestamp) => {
-      if (!date) return new Date();
-      return date instanceof Timestamp ? date.toDate() : new Date(date);
-    }
-    const dateStr = getDate(entry.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-    doc.setFont('times', 'italic');
-    doc.setFontSize(10);
-    doc.setTextColor('#64748b'); // slate-500
-    doc.text(dateStr, margin, y);
-    y += 8;
-
-
-    // --- Body ---
-    const addSection = async (title: string, content: string) => {
-      if (!content) return;
-      
-      const titleHeight = 6;
-      checkNewPage(titleHeight);
-      doc.setTextColor('#334155'); // slate-700
-      doc.setFont('times', 'bold');
-      doc.setFontSize(12);
-      doc.text(title, margin, y);
-      y += titleHeight;
-      
-      const tempDiv = document.createElement('div');
-      tempDiv.style.width = `${usableWidth}mm`;
-      tempDiv.style.fontFamily = 'times';
-      tempDiv.style.fontSize = '12pt';
-      tempDiv.style.color = '#1e293b';
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.textAlign = 'justify';
-      tempDiv.style.lineHeight = '1.5';
-      tempDiv.innerHTML = content; // Use innerHTML to parse b and i tags
-      document.body.appendChild(tempDiv);
-      
-      await html2canvas(tempDiv, {
-          scale: 2,
-          windowWidth: tempDiv.scrollWidth,
-          windowHeight: tempDiv.scrollHeight,
-          backgroundColor: null, // Transparent background
-      }).then(canvas => {
-          const imgData = canvas.toDataURL('image/png');
-          const imgProps = doc.getImageProperties(imgData);
-          const imgHeight = (imgProps.height * usableWidth) / imgProps.width;
-
-          checkNewPage(imgHeight);
-          doc.addImage(imgData, 'PNG', margin, y, usableWidth, imgHeight);
-          y += imgHeight;
-      });
-
-      document.body.removeChild(tempDiv);
-      y += 4; // spacing after section
+    // --- ESTILOS ---
+    const tempDivStyles = (div: HTMLElement) => {
+        div.style.padding = '10px'; 
+        div.style.boxSizing = 'border-box';
+        div.style.fontFamily = '"Times New Roman", Times, serif';
+        div.style.fontSize = '12pt';
+        div.style.color = '#000000'; // Negro puro
+        div.style.textAlign = 'justify';
+        div.style.lineHeight = '1.5';
+        div.style.marginBottom = '0px'; 
     };
-    
-    await addSection('Observación', entry.observation);
-    await addSection('Enseñanza', entry.teaching);
-    await addSection('Aplicación Práctica', entry.practicalApplication);
-    
-    // --- Separator ---
-    if(y < pageHeight - bottomMargin - 10) {
-        doc.setDrawColor('#e2e8f0'); // slate-200
-        doc.setLineWidth(0.3);
-        doc.line(margin, y, pageWidth - margin, y);
-        y += 10; // Extra space between entries
-    }
 
-    return y;
-  }
-
-
-  return (
-    <Button
-      onClick={handleDownload}
-      variant="outline"
-      disabled={!entry && (!entries || entries.length === 0)}
-      aria-label="Descargar entrada como PDF"
-    >
-      <Download className="mr-2 h-4 w-4" />
-      Descargar
-    </Button>
-  );
+    return (
+        <Button
+            onClick={handleDownload}
+            variant="outline"
+            disabled={!entry && (!entries || entries.length === 0)}
+            className="w-full sm:w-auto"
+        >
+            <Download className="mr-2 h-4 w-4" />
+            Descargar PDF
+        </Button>
+    );
 }
