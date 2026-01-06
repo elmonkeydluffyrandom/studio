@@ -82,8 +82,18 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     }
 
     try {
+      // AQUÍ ESTÁ LA CORRECCIÓN MÁGICA
+      // Guardamos los datos con ambos nombres (Inglés y Español)
+      // para que funcione el Formulario y también el PDF/Lista.
       const entryData = {
         ...data,
+        
+        // Traducción para compatibilidad con PDF y Lista:
+        libro: data.bibleBook,
+        capitulo: data.chapter,
+        verso: data.bibleVerse,
+        texto: data.verseText, 
+
         userId: user.uid,
         tagIds: data.tagIds ? data.tagIds.split(',').map(tag => tag.trim()).filter(Boolean) : [],
         updatedAt: serverTimestamp(),

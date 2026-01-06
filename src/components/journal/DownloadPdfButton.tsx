@@ -217,7 +217,8 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
             if (entry) {
                 await addEntryContent(pdf, entry, 0); 
-                fileName = `${(entry.bibleVerse || 'entrada').replace(/ /g, '_').replace(/:/g, '-')}.pdf`;
+                const fullBibleVerse = `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}`;
+                fileName = `${fullBibleVerse.replace(/ /g, '_').replace(/:/g, '-')}.pdf`;
             } else if (entries && entries.length > 0) {
                 await addBulkEntriesToPdf(pdf, entries);
             }
@@ -398,7 +399,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         doc.setTextColor(255, 255, 255);
         doc.setFont('times', 'bold');
         doc.setFontSize(24);
-        const title = entry.bibleVerse || 'Sin Título';
+        const title = `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}` || 'Sin Título';
         doc.text(title, pageWidth / 2, 22, { align: 'center' });
 
         const getDate = (date: any) => {
@@ -578,3 +579,5 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
         </Button>
     );
 }
+
+    
