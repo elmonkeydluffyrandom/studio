@@ -148,7 +148,7 @@ export default function EntryDetailPage() {
           <DialogHeader>
             <DialogTitle>Editar Entrada</DialogTitle>
           </DialogHeader>
-          <JournalForm entry={entry} onSave={handleCloseModal} isModal={true} />
+          {entry && <JournalForm entry={entry} onSave={handleCloseModal} isModal={true} />}
         </DialogContent>
       </Dialog>
     </>

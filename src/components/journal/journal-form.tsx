@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { RichTextEditor } from '@/components/rich-text-editor';
+import { RichTextEditor } from '@/components/rich-text-editor/index';
 import {
   Select,
   SelectContent,
@@ -60,16 +61,33 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const form = useForm<JournalFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      bibleBook: entry?.bibleBook || '',
-      chapter: entry?.chapter || 1,
-      bibleVerse: entry?.bibleVerse || '',
-      verseText: entry?.verseText || '',
-      observation: entry?.observation || '',
-      teaching: entry?.teaching || '',
-      practicalApplication: entry?.practicalApplication || '',
-      tagIds: Array.isArray(entry?.tagIds) ? entry?.tagIds.join(', ') : '',
+      bibleBook: '',
+      chapter: 1,
+      bibleVerse: '',
+      verseText: '',
+      observation: '',
+      teaching: '',
+      practicalApplication: '',
+      tagIds: '',
     },
   });
+
+  useEffect(() => {
+    if (entry) {
+      const valuesToSet = {
+        bibleBook: entry.bibleBook || '',
+        chapter: entry.chapter || 1,
+        bibleVerse: entry.bibleVerse || '',
+        verseText: entry.verseText || '',
+        observation: entry.observation || '',
+        teaching: entry.teaching || '',
+        practicalApplication: entry.practicalApplication || '',
+        tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
+      };
+      form.reset(valuesToSet);
+    }
+  }, [entry, form]);
+
 
   const onSubmit = async (data: JournalFormData) => {
     if (!user || !firestore) {
@@ -82,18 +100,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     }
 
     try {
-      // AQUÍ ESTÁ LA CORRECCIÓN MÁGICA
-      // Guardamos los datos con ambos nombres (Inglés y Español)
-      // para que funcione el Formulario y también el PDF/Lista.
       const entryData = {
         ...data,
-        
-        // Traducción para compatibilidad con PDF y Lista:
-        libro: data.bibleBook,
-        capitulo: data.chapter,
-        verso: data.bibleVerse,
-        texto: data.verseText, 
-
         userId: user.uid,
         tagIds: data.tagIds ? data.tagIds.split(',').map(tag => tag.trim()).filter(Boolean) : [],
         updatedAt: serverTimestamp(),
@@ -122,11 +130,10 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       
       onSave?.();
       
-      // Solo redirige si no es un modal
       if (!isModal) {
         router.push(`/entry/${entryId}`);
       } else {
-        router.refresh(); // Refresca los datos en la página actual
+        router.refresh(); 
       }
 
     } catch (error) {
@@ -142,7 +149,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const formContent = (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Referencia Bíblica */}
         <fieldset className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FormField
             control={form.control}

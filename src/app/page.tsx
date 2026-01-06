@@ -64,7 +64,9 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await auth.signOut();
+      if (auth) {
+        await auth.signOut();
+      }
       window.location.reload();
     } catch (error) {
       console.error("❌ Error logout:", error);
@@ -136,7 +138,7 @@ export default function DashboardPage() {
   };
 
   const entriesRef = useMemoFirebase(
-    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries'), orderBy('createdAt', 'asc')) : null,
+    () => user && firestore ? query(collection(firestore, 'users', user.uid, 'journalEntries'), orderBy('createdAt', 'desc')) : null,
     [user, firestore]
   );
 
@@ -164,7 +166,7 @@ export default function DashboardPage() {
     setViewingEntry(null);
   };
 
-  const handleCloseEdit = () => {
+  const handleCloseModals = () => {
     setEditingEntry(null);
     setIsCreating(false);
   };
@@ -416,7 +418,7 @@ export default function DashboardPage() {
         />
       )}
 
-      <Dialog open={!!editingEntry || isCreating} onOpenChange={(open) => !open && handleCloseEdit()}>
+      <Dialog open={isCreating || !!editingEntry} onOpenChange={(open) => !open && handleCloseModals()}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg sm:text-xl">
@@ -424,8 +426,8 @@ export default function DashboardPage() {
             </DialogTitle>
           </DialogHeader>
           <JournalForm 
-            entry={editingEntry ?? undefined} 
-            onSave={handleCloseEdit}
+            entry={editingEntry}
+            onSave={handleCloseModals}
             isModal={true}
           />
         </DialogContent>
