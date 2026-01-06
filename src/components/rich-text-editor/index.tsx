@@ -2,7 +2,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { MenuBar } from './menu-bar';
 
 interface RichTextEditorProps {
@@ -12,6 +12,9 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorProps) {
+  const [isMounted, setIsMounted] = useState(false);
+  const previousValue = useRef<string>('');
+  
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -21,9 +24,13 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
         horizontalRule: false,
       }),
     ],
-    content: value,
+    content: '<p></p>',
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = editor.getHTML();
+      if (html !== previousValue.current) {
+        previousValue.current = html;
+        onChange(html);
+      }
     },
     editorProps: {
       attributes: {
@@ -32,13 +39,35 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
     },
   });
 
+  // Montar editor
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value);
-    }
-  }, [editor, value]);
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
 
-  if (!editor) {
+  // Sincronizar valor externo - FIX CRÍTICO
+  useEffect(() => {
+    if (!editor || !isMounted) return;
+    
+    const normalizedValue = value || '<p></p>';
+    const currentHtml = editor.getHTML();
+    
+    // Solo actualizar si el valor externo es diferente
+    if (normalizedValue !== currentHtml && normalizedValue !== previousValue.current) {
+      console.log('📝 Editor: Actualizando contenido', {
+        from: currentHtml.substring(0, 50),
+        to: normalizedValue.substring(0, 50)
+      });
+      
+      // Usar setTimeout para evitar conflictos de renderizado
+      setTimeout(() => {
+        editor.commands.setContent(normalizedValue);
+        previousValue.current = normalizedValue;
+      }, 10);
+    }
+  }, [editor, value, isMounted]);
+
+  if (!editor || !isMounted) {
     return (
       <div className="border rounded-md p-4 min-h-[150px] bg-muted animate-pulse">
         <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
@@ -52,7 +81,7 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
       <MenuBar editor={editor} />
       <EditorContent editor={editor} />
       {placeholder && !editor.getText() && (
-        <div className="absolute top-[70px] left-3 text-muted-foreground pointer-events-none">
+        <div className="absolute top-[70px] left-3 text-muted-foreground pointer-events-none text-sm">
           {placeholder}
         </div>
       )}

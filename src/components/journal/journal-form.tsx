@@ -59,6 +59,28 @@ interface JournalFormProps {
   isModal?: boolean;
 }
 
+// Función para normalizar contenido HTML del editor
+const normalizeEditorContent = (content: string | undefined): string => {
+  if (!content) return '<p></p>';
+  
+  // Si ya es HTML, devolverlo
+  if (content.includes('<') && content.includes('>')) {
+    // Asegurar que tenga un párrafo contenedor
+    const trimmed = content.trim();
+    if (!trimmed.startsWith('<')) {
+      return `<p>${content}</p>`;
+    }
+    return content;
+  }
+  
+  // Si es texto plano, convertirlo a HTML
+  if (content.trim().length > 0) {
+    return `<p>${content.replace(/\n/g, '<br>')}</p>`;
+  }
+  
+  return '<p></p>';
+};
+
 export default function JournalForm({ entry, onSave, isModal = false }: JournalFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -123,31 +145,52 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     },
   });
 
-  // Cargar datos iniciales - FIXED: Mantiene el libro seleccionado
+  // Cargar datos iniciales - VERSIÓN MEJORADA con normalización
   useEffect(() => {
     if (entry) {
-      console.log('📖 Cargando entrada:', entry.bibleBook, entry.chapter);
+      console.log('📖 Cargando entrada para editar:', {
+        id: entry.id,
+        observationRaw: entry.observation?.substring(0, 100),
+        teachingRaw: entry.teaching?.substring(0, 100),
+        practicalAppRaw: entry.practicalApplication?.substring(0, 100),
+      });
       
       const parts = (entry.bibleVerse || '').split(':');
       const verseOnly = parts.length > 1 ? parts[parts.length - 1] : entry.bibleVerse || '';
 
-      // RESET completo con todos los valores
+      // Normalizar contenido HTML antes de cargar
+      const normalizedObservation = normalizeEditorContent(entry.observation);
+      const normalizedTeaching = normalizeEditorContent(entry.teaching);
+      const normalizedPracticalApp = normalizeEditorContent(entry.practicalApplication);
+
+      // RESET con valores normalizados
       form.reset({
         bibleBook: entry.bibleBook || '',
         chapter: Number(entry.chapter) || undefined,
         bibleVerse: verseOnly,
         verseText: entry.verseText || '',
         tagIds: entry.tagIds?.join(', ') || '',
-        observation: entry.observation || '',
-        teaching: entry.teaching || '',
-        practicalApplication: entry.practicalApplication || '',
+        
+        // CONTENIDO NORMALIZADO
+        observation: normalizedObservation,
+        teaching: normalizedTeaching,
+        practicalApplication: normalizedPracticalApp,
       });
       
-      console.log('✅ Formulario cargado con:', {
+      console.log('✅ Formulario cargado con contenido normalizado:', {
         book: entry.bibleBook,
         chapter: entry.chapter,
-        verse: verseOnly
+        observationNormalized: normalizedObservation.substring(0, 100),
+        teachingNormalized: normalizedTeaching.substring(0, 100),
       });
+      
+      // Debug adicional después de un momento
+      setTimeout(() => {
+        console.log('🔍 Valores después de reset:', {
+          observation: form.getValues('observation')?.substring(0, 100),
+          teaching: form.getValues('teaching')?.substring(0, 100),
+        });
+      }, 500);
     }
   }, [entry, form]);
 
@@ -176,17 +219,25 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
       for (const pending of pendingEntries) {
         try {
+          // Normalizar contenido antes de sincronizar
+          const normalizedData = {
+            ...pending.data,
+            observation: normalizeEditorContent(pending.data.observation),
+            teaching: normalizeEditorContent(pending.data.teaching),
+            practicalApplication: normalizeEditorContent(pending.data.practicalApplication),
+          };
+
           if (pending.type === 'update' && pending.data.id) {
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', pending.data.id);
             await setDoc(entryRef, {
-              ...pending.data,
+              ...normalizedData,
               updatedAt: Timestamp.now(),
               _syncedFromOffline: true
             }, { merge: true });
           } else if (pending.type === 'create') {
             const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
             await addDoc(entriesCollection, {
-              ...pending.data,
+              ...normalizedData,
               createdAt: Timestamp.now(),
               _syncedFromOffline: true
             });
@@ -239,7 +290,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     }
   }, [user, firestore, pendingCount, toast, router]);
 
-  // Función de guardado PRINCIPAL - FIXED
+  // Función de guardado PRINCIPAL - VERSIÓN MEJORADA
   const handleSave = async (data: JournalFormValues): Promise<{success: boolean; offline: boolean}> => {
     if (!user || !firestore) {
       toast({
@@ -253,9 +304,14 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     setIsSaving(true);
 
     try {
-      // Preparar datos
+      // Preparar datos con contenido normalizado
       const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
       const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
+      
+      // Normalizar contenido HTML antes de guardar
+      const normalizedObservation = normalizeEditorContent(data.observation);
+      const normalizedTeaching = normalizeEditorContent(data.teaching);
+      const normalizedPracticalApp = normalizeEditorContent(data.practicalApplication);
       
       const entryData = {
         bibleBook: data.bibleBook,
@@ -263,20 +319,34 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         bibleVerse: fullBibleVerse,
         verseText: data.verseText,
         tagIds: tags,
-        observation: data.observation,
-        teaching: data.teaching,
-        practicalApplication: data.practicalApplication,
+        
+        // CONTENIDO NORMALIZADO
+        observation: normalizedObservation,
+        teaching: normalizedTeaching,
+        practicalApplication: normalizedPracticalApp,
+        
         userId: user.uid,
         updatedAt: Timestamp.now()
       };
 
+      // Debug: mostrar datos que se van a guardar
+      console.log('💾 Datos preparados para guardar:', {
+        observation: entryData.observation?.substring(0, 100),
+        teaching: entryData.teaching?.substring(0, 100),
+        isHTML: {
+          obs: entryData.observation?.includes('<'),
+          teach: entryData.teaching?.includes('<')
+        }
+      });
+
       const isConnected = await OfflineStorage.checkRealConnection();
       
       if (!isConnected) {
-        // 🔥 MODO OFFLINE: Guardar en localStorage PRIMERO
+        // 🔥 MODO OFFLINE: Guardar en localStorage
         console.log('📴 Guardando en modo offline...');
         
-        const offlineId = OfflineStorage.saveEntry({
+        // Usar saveEntryEnhanced que maneja mejor la serialización
+        const offlineId = OfflineStorage.saveEntryEnhanced({
           id: entry?.id || '',
           type: isEditing ? 'update' : 'create',
           data: entryData,
@@ -372,7 +442,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         console.error('Error Firebase:', firebaseError);
         
         // Si Firebase falla, guardar offline
-        const offlineId = OfflineStorage.saveEntry({
+        const offlineId = OfflineStorage.saveEntryEnhanced({
           id: entry?.id || '',
           type: isEditing ? 'update' : 'create',
           data: entryData,
@@ -506,7 +576,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                 <FormLabel>Libro *</FormLabel>
                 <Select 
                   onValueChange={field.onChange} 
-                  value={field.value} // ✅ FIXED: Usar value en lugar de defaultValue
+                  value={field.value}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -593,6 +663,9 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                   />
                 </div>
               </FormControl>
+              <FormDescription className="text-xs text-muted-foreground">
+                Puedes usar negrita, cursiva y listas en el editor
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -613,6 +686,9 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                   />
                 </div>
               </FormControl>
+              <FormDescription className="text-xs text-muted-foreground">
+                Usa el editor para formatear tu enseñanza
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -633,6 +709,9 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                   />
                 </div>
               </FormControl>
+              <FormDescription className="text-xs text-muted-foreground">
+                Formatea tu aplicación práctica
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
