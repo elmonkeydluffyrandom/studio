@@ -61,14 +61,14 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const form = useForm<JournalFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      bibleBook: '',
-      chapter: 1,
-      bibleVerse: '',
-      verseText: '',
-      observation: '',
-      teaching: '',
-      practicalApplication: '',
-      tagIds: '',
+      bibleBook: entry?.bibleBook || '',
+      chapter: entry?.chapter || 1,
+      bibleVerse: entry?.bibleVerse || '',
+      verseText: entry?.verseText || '',
+      observation: entry?.observation || '',
+      teaching: entry?.teaching || '',
+      practicalApplication: entry?.practicalApplication || '',
+      tagIds: Array.isArray(entry?.tagIds) ? entry?.tagIds.join(', ') : '',
     },
   });
 
