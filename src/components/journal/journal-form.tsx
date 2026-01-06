@@ -86,7 +86,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
       });
     }
-  }, [entry, form.reset]);
+  }, [entry, form]);
 
 
   const onSubmit = async (data: JournalFormData) => {

@@ -6,8 +6,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: Date | Timestamp) {
+export function formatDate(date: Date | Timestamp | null | undefined) {
+  if (!date) {
+    return '';
+  }
   const dateObj = date instanceof Timestamp ? date.toDate() : new Date(date);
+  if (isNaN(dateObj.getTime())) {
+    return '';
+  }
   return dateObj.toLocaleDateString('es-ES', {
     year: 'numeric',
     month: 'long',
