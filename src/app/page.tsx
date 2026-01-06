@@ -201,10 +201,23 @@ export default function DashboardPage() {
       return acc;
     }, {} as Record<string, JournalEntry[]>);
 
+    // Natural sort for bible verses (chapter, then verse)
+    const naturalSort = (a: JournalEntry, b: JournalEntry) => {
+      // 1. Compare chapters
+      if (a.chapter !== b.chapter) {
+        return a.chapter - b.chapter;
+      }
+      
+      // 2. If chapters are same, compare verses
+      // This handles cases like "1", "1-3", "10" correctly
+      const verseA = a.bibleVerse.split('-')[0];
+      const verseB = b.bibleVerse.split('-')[0];
+      
+      return parseInt(verseA, 10) - parseInt(verseB, 10);
+    };
+
     for (const book in grouped) {
-      grouped[book].sort((a, b) => {
-        return a.bibleVerse.localeCompare(b.bibleVerse, undefined, { numeric: true, sensitivity: 'base' });
-      });
+      grouped[book].sort(naturalSort);
     }
 
     const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
