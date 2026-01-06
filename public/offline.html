@@ -1,0 +1,88 @@
+<!-- public/offline.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modo Offline - Mi Diario Bíblico</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            font-size: 3em;
+            margin: 0 0 20px 0;
+        }
+        p {
+            font-size: 1.2em;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        .icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+        }
+        .tip {
+            background: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📴</div>
+        <h1>Estás Offline</h1>
+        <p>
+            No hay conexión a internet en este momento.
+            <br>
+            Puedes seguir usando tu diario bíblico y todas las entradas
+            se guardarán localmente.
+        </p>
+        <p>
+            Cuando recuperes la conexión, tus cambios se sincronizarán
+            automáticamente con la nube.
+        </p>
+        <div class="tip">
+            💡 <strong>Consejo:</strong> Mientras estés offline, evita
+            cerrar esta pestaña para no perder tus cambios.
+        </div>
+    </div>
+    
+    <script>
+        // Intentar recargar cuando hay conexión
+        window.addEventListener('online', () => {
+            console.log('🔌 Conexión restaurada, recargando...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
+        
+        // Mostrar notificación
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            console.log('✅ Service Worker está controlando la página');
+        }
+    </script>
+</body>
+</html>
