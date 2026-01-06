@@ -20,6 +20,14 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     const handleDownload = async () => {
         try {
             setIsGenerating(true);
+            
+            // Mostrar toast de "Generando" inmediatamente
+            toast({ 
+                title: "Generando PDF", 
+                description: "Por favor espera...",
+                duration: 3000,
+            });
+
             await new Promise(resolve => setTimeout(resolve, 100));
 
             const pdf = new jsPDF({
@@ -38,19 +46,71 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 await addBulkEntriesToPdf(pdf, entries);
             }
 
-            // Descarga compatible con móviles (Blob)
-            const pdfBlob = pdf.output('blob');
-            const url = URL.createObjectURL(pdfBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            toast({ title: "Éxito", description: "PDF descargado correctamente." });
+            // Para mejor compatibilidad con móviles
+            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                // iOS - usar método alternativo
+                const pdfData = pdf.output('datauristring');
+                const newWindow = window.open();
+                if (newWindow) {
+                    newWindow.document.write(`
+                        <iframe 
+                            width="100%" 
+                            height="100%" 
+                            src="${pdfData}"
+                            style="border: none;"
+                        ></iframe>
+                    `);
+                    newWindow.document.title = fileName;
+                    
+                    toast({ 
+                        title: "PDF listo", 
+                        description: "El PDF se abrió en una nueva ventana. Usa 'Compartir' para guardarlo.",
+                        duration: 5000,
+                    });
+                }
+            } else if (/Android/i.test(navigator.userAgent)) {
+                // Android - método mejorado
+                const pdfBlob = pdf.output('blob');
+                const url = URL.createObjectURL(pdfBlob);
+                
+                // Intentar con iframe primero
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                    URL.revokeObjectURL(url);
+                }, 1000);
+                
+                toast({ 
+                    title: "PDF descargado", 
+                    description: "Revisa tu carpeta de descargas o notificaciones.",
+                    duration: 4000,
+                });
+            } else {
+                // Desktop y otros navegadores
+                const pdfBlob = pdf.output('blob');
+                const url = URL.createObjectURL(pdfBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                toast({ 
+                    title: "✅ PDF descargado", 
+                    description: "El archivo se ha descargado correctamente.",
+                    duration: 4000,
+                });
+            }
 
         } catch (error) {
             console.error("Error generando PDF:", error);
@@ -131,16 +191,12 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
             doc.setTextColor(15, 23, 42); 
             doc.setFont('times', 'bold');
-            // ============ CAMBIO 1: Tamaño 15pt ============
-            doc.setFontSize(15); // Cambiado de 13 a 15
-            // ============ CAMBIO 2: Solo mostrar el título sin traducción ============
-            // Si el título tiene paréntesis, mostrar solo lo que está antes
+            doc.setFontSize(15);
             let displayTitle = sectionTitle;
             if (sectionTitle.includes('(')) {
                 displayTitle = sectionTitle.split('(')[0].trim();
             }
             doc.text(displayTitle, margin, y);
-            // ============ FIN DE CAMBIOS ============
             
             y += 2; 
 
@@ -250,8 +306,6 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             y += 15;
         };
 
-        // ============ LLAMADAS CON TÍTULOS SIMPLIFICADOS ============
-        // Pasamos los títulos completos pero addSection los procesará
         await addSection('Escritura (S - Scripture)', entry.verseText, true);
         await addSection('Observación (O - Observation)', entry.observation);
         await addSection('Enseñanza', entry.teaching);

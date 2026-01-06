@@ -1,9 +1,9 @@
 'use client';
 
-import { useForm, useWatch } from 'react-hook-form'; // Agregamos useWatch
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState, useCallback, useTransition } from 'react'; // Agregamos useCallback y useState
+import { useEffect, useState, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Cloud, CloudOff, CheckCircle2 } from 'lucide-react'; // Nuevos iconos
+import { Loader2, Save, Cloud, CloudOff, CheckCircle2, Wifi, WifiOff } from 'lucide-react'; // Iconos añadidos
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, addDoc, setDoc, Timestamp, collection } from 'firebase/firestore';
@@ -60,10 +60,77 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const [isPending, startTransition] = useTransition();
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  const [isOnline, setIsOnline] = useState(true); // ← Estado para conexión
+  const [offlineQueue, setOfflineQueue] = useState<any[]>([]); // ← Cola offline
   
   const { user } = useUser();
   const firestore = useFirestore();
   const isEditing = !!entry;
+
+  // ← Detectar cambios en la conexión
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast({
+        title: "✅ Conectado",
+        description: "Ya tienes conexión a internet.",
+        duration: 3000,
+      });
+      // Intentar sincronizar cola offline
+      syncOfflineQueue();
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast({
+        variant: "destructive",
+        title: "⚠️ Sin conexión",
+        description: "Estás en modo offline. Los cambios se guardarán localmente.",
+        duration: 5000,
+      });
+    };
+
+    setIsOnline(navigator.onLine);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [toast]);
+
+  // ← Sincronizar cola offline cuando vuelve la conexión
+  const syncOfflineQueue = async () => {
+    const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+    if (queue.length === 0 || !user || !firestore) return;
+
+    try {
+      for (const item of queue) {
+        if (item.type === 'update' && item.entryId) {
+          const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', item.entryId);
+          await setDoc(entryRef, { ...item.data, updatedAt: Timestamp.now() }, { merge: true });
+        } else if (item.type === 'create') {
+          const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
+          await addDoc(entriesCollection, { ...item.data, createdAt: Timestamp.now() });
+        }
+      }
+      
+      // Limpiar cola después de sincronizar
+      localStorage.removeItem('offlineQueue');
+      setOfflineQueue([]);
+      
+      toast({
+        title: "🔄 Sincronizado",
+        description: `Se sincronizaron ${queue.length} cambios pendientes.`,
+        duration: 4000,
+      });
+      
+    } catch (error) {
+      console.error("Error sincronizando cola offline:", error);
+    }
+  };
 
   const defaultFormValues: Partial<JournalFormValues> = {
     bibleBook: '',
@@ -123,7 +190,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   }, [entry]);
 
 
-  // --- LÓGICA CENTRAL DE GUARDADO (Reutilizable) ---
+  // --- LÓGICA CENTRAL DE GUARDADO MEJORADA (Con soporte offline) ---
   const performSave = useCallback(async (data: JournalFormValues, isAutoSave: boolean = false) => {
     if (!user || !firestore) return;
 
@@ -153,19 +220,33 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     try {
         setSaveStatus('saving');
         
+        // ← VERIFICACIÓN DE CONEXIÓN
+        if (!navigator.onLine) {
+          throw new Error('OFFLINE_MODE');
+        }
+
+        // ← TIMEOUT para evitar que se quede colgado
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('TIMEOUT')), 8000); // 8 segundos máximo
+        });
+
         if (isEditing && entry?.id) {
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-            await setDoc(entryRef, { ...entryData, updatedAt: Timestamp.now() }, { merge: true });
+            await Promise.race([
+              setDoc(entryRef, { ...entryData, updatedAt: Timestamp.now() }, { merge: true }),
+              timeoutPromise
+            ]);
         } else {
             // Si es nueva, no podemos autoguardar hasta que se cree la primera vez manualmente
             if (isAutoSave && !entry?.id) {
-                // Si es autoguardado de una entrada NUEVA que aun no tiene ID, lo saltamos
-                // para evitar crear duplicados infinitos.
                 setSaveStatus('idle');
                 return; 
             }
             const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-            await addDoc(entriesCollection, { ...entryData, createdAt: Timestamp.now() });
+            await Promise.race([
+              addDoc(entriesCollection, { ...entryData, createdAt: Timestamp.now() }),
+              timeoutPromise
+            ]);
         }
 
         setSaveStatus('saved');
@@ -173,16 +254,56 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
         // Solo mostramos Toast si fue clic manual, para no spamear en autoguardado
         if (!isAutoSave) {
-            toast({ title: '¡Guardado!', description: 'Tu entrada se ha actualizado exitosamente.' });
+            toast({ 
+              title: '✅ ¡Guardado!', 
+              description: 'Tu entrada se ha actualizado exitosamente.' 
+            });
             if (onSave) onSave();
             router.refresh();
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving:", error);
+        
+        // ← MANEJO DE ERRORES OFFLINE
+        if (error.message === 'OFFLINE_MODE' || error.message === 'TIMEOUT') {
+            // Guardar en cola offline
+            const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+            
+            const offlineItem = {
+              type: isEditing && entry?.id ? 'update' : 'create',
+              entryId: entry?.id,
+              data: entryData,
+              timestamp: Date.now(),
+            };
+            
+            queue.push(offlineItem);
+            localStorage.setItem('offlineQueue', JSON.stringify(queue));
+            setOfflineQueue(queue);
+            
+            setSaveStatus('saved');
+            setLastSavedTime(new Date());
+            
+            if (!isAutoSave) {
+              toast({ 
+                title: '📱 Guardado offline', 
+                description: 'Los cambios se guardaron localmente. Se sincronizarán cuando tengas conexión.',
+                duration: 5000,
+              });
+              if (onSave) onSave();
+              router.refresh();
+            }
+            return;
+        }
+        
+        // ← ERRORES DE RED NORMALES
         setSaveStatus('error');
         if (!isAutoSave) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar.' });
+            toast({ 
+              variant: 'destructive', 
+              title: '❌ Error', 
+              description: 'No se pudo guardar. Revisa tu conexión.' 
+            });
         }
     }
   }, [user, firestore, isEditing, entry, onSave, router, toast]);
@@ -190,16 +311,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
   // --- AUTOGUARDADO (Debounce) ---
   useEffect(() => {
-    // Si no estamos editando (es nueva entrada), no autoguardamos para no llenar la DB de borradores vacíos
-    // Opcional: Podrías habilitarlo si manejas IDs temporales, pero por seguridad, mejor solo en edición.
     if (!isEditing) return; 
 
-    // Esperar 3 segundos después de que el usuario deje de escribir
     const timer = setTimeout(() => {
         const currentValues = form.getValues();
-        // Verificamos que haya datos mínimos para intentar guardar
         if (currentValues.bibleBook && currentValues.chapter) {
-            performSave(currentValues, true); // true = es autoguardado
+            performSave(currentValues, true);
         }
     }, 3000);
 
@@ -210,12 +327,21 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   // Envío Manual (Botón)
   const onSubmit = (data: JournalFormValues) => {
     startTransition(() => {
-        performSave(data, false); // false = guardado manual
+        performSave(data, false);
     });
   };
 
-  // Componente visual de estado
+  // Componente visual de estado MEJORADO
   const StatusIndicator = () => {
+    if (!isOnline) {
+        return (
+          <span className="text-xs text-amber-600 flex items-center gap-1">
+            <WifiOff className="h-3 w-3"/>
+            Offline ({offlineQueue.length} pendientes)
+          </span>
+        );
+    }
+    
     if (saveStatus === 'saving') {
         return <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Guardando...</span>;
     }
@@ -225,18 +351,33 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     if (saveStatus === 'error') {
         return <span className="text-xs text-red-500 flex items-center gap-1"><CloudOff className="h-3 w-3"/> Error al guardar</span>;
     }
-    return <span className="text-xs text-muted-foreground flex items-center gap-1"><Cloud className="h-3 w-3"/> Listo</span>;
+    return <span className="text-xs text-green-600 flex items-center gap-1"><Wifi className="h-3 w-3"/> En línea</span>;
   };
 
   const formContent = (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
-        {/* Barra de estado superior */}
+        {/* Barra de estado superior MEJORADA */}
         <div className="flex justify-between items-center bg-muted/30 p-2 rounded-md mb-4">
              <span className="text-xs font-medium text-muted-foreground">Estado de sincronización:</span>
              <StatusIndicator />
         </div>
+
+        {/* ← Mostrar advertencia offline */}
+        {!isOnline && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+            <p className="text-amber-800 text-sm font-medium flex items-center gap-2">
+              <WifiOff className="h-4 w-4" />
+              Modo offline: Los cambios se guardan localmente y se sincronizarán automáticamente cuando recuperes la conexión.
+            </p>
+            {offlineQueue.length > 0 && (
+              <p className="text-amber-700 text-xs mt-1">
+                Tienes {offlineQueue.length} cambio(s) pendientes de sincronizar.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-6 sm:gap-4 space-y-6 sm:space-y-0">
             <FormField
@@ -398,9 +539,14 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                     Cancelar
                 </Button>
             )}
-            <Button type="submit" disabled={isPending || saveStatus === 'saving'} className="w-full sm:w-auto">
-            {isPending || saveStatus === 'saving' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
+            <Button 
+              type="submit" 
+              disabled={isPending || saveStatus === 'saving'} 
+              className="w-full sm:w-auto"
+            >
+              {isPending || saveStatus === 'saving' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
+              {!isOnline && " (Offline)"}
             </Button>
         </div>
       </form>
