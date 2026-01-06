@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -71,23 +70,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       tagIds: Array.isArray(entry?.tagIds) ? entry?.tagIds.join(', ') : '',
     },
   });
-
-  useEffect(() => {
-    if (entry) {
-      console.log('Cargando datos en editor...', entry);
-      form.reset({
-        bibleBook: entry.bibleBook || '',
-        chapter: entry.chapter || 1,
-        bibleVerse: entry.bibleVerse || '',
-        verseText: entry.verseText || '',
-        observation: entry.observation || '',
-        teaching: entry.teaching || '',
-        practicalApplication: entry.practicalApplication || '',
-        tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
-      });
-    }
-  }, [entry, form]);
-
 
   const onSubmit = async (data: JournalFormData) => {
     if (!user || !firestore) {
