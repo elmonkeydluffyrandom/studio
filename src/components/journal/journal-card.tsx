@@ -23,6 +23,9 @@ export default function JournalCard({ entry, onEdit, onView }: JournalCardProps)
     onView(entry);
   }
 
+  const fullBibleVerse = `${entry.bibleBook} ${entry.chapter}:${entry.bibleVerse}`;
+
+
   return (
       <div 
         className="group relative flex flex-col justify-between overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition-all duration-200 ease-in-out hover:shadow-md hover:border-primary/30 cursor-pointer"
@@ -32,7 +35,7 @@ export default function JournalCard({ entry, onEdit, onView }: JournalCardProps)
           <CardHeader className="flex-row items-start justify-between p-3 space-y-0">
             <div className='flex-1'>
               <CardTitle className="font-headline text-base leading-tight font-bold">
-                {entry.bibleVerse}
+                {fullBibleVerse}
               </CardTitle>
               <CardDescription className="text-xs mt-1">
                 {formatDate(entry.createdAt)}
