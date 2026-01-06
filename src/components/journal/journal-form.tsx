@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -58,35 +58,41 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const router = useRouter();
   const { toast } = useToast();
 
+  const getInitialValues = useCallback((entry: JournalEntry | null | undefined): JournalFormData => {
+    if (!entry) {
+      return {
+        bibleBook: '',
+        chapter: 1,
+        bibleVerse: '',
+        verseText: '',
+        observation: '',
+        teaching: '',
+        practicalApplication: '',
+        tagIds: '',
+      };
+    }
+    return {
+      bibleBook: entry.bibleBook || '',
+      chapter: entry.chapter || 1,
+      bibleVerse: entry.bibleVerse || '',
+      verseText: entry.verseText || '',
+      observation: entry.observation || '',
+      teaching: entry.teaching || '',
+      practicalApplication: entry.practicalApplication || '',
+      tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
+    };
+  }, []);
+
   const form = useForm<JournalFormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      bibleBook: '',
-      chapter: 1,
-      bibleVerse: '',
-      verseText: '',
-      observation: '',
-      teaching: '',
-      practicalApplication: '',
-      tagIds: '',
-    },
+    defaultValues: getInitialValues(entry),
   });
 
   useEffect(() => {
-    if (entry) {
-      const valuesToSet = {
-        bibleBook: entry.bibleBook || '',
-        chapter: entry.chapter || 1,
-        bibleVerse: entry.bibleVerse || '',
-        verseText: entry.verseText || '',
-        observation: entry.observation || '',
-        teaching: entry.teaching || '',
-        practicalApplication: entry.practicalApplication || '',
-        tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
-      };
-      form.reset(valuesToSet);
-    }
-  }, [entry, form]);
+    // This effect ensures the form resets if the entry prop changes
+    // after the component has already mounted (e.g., in a modal).
+    form.reset(getInitialValues(entry));
+  }, [entry, form, getInitialValues]);
 
 
   const onSubmit = async (data: JournalFormData) => {
@@ -97,6 +103,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         description: 'No se pudo guardar la entrada.',
       });
       return;
+    }
+
+    // Always close the modal immediately after submitting.
+    // The save operation will continue in the background.
+    if (onSave) {
+        onSave();
     }
 
     try {
@@ -128,9 +140,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         });
       }
       
-      onSave?.();
-      
-      if (!isModal) {
+      if (!isModal && entryId) {
         router.push(`/entry/${entryId}`);
       } else {
         router.refresh(); 
