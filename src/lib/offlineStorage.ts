@@ -1,4 +1,4 @@
-// src/lib/offlineStorage.ts
+// src/lib/offlineStorage.ts - VERSIÓN COMPLETA CORREGIDA
 export interface OfflineEntry {
   id: string;
   type: 'create' | 'update';
@@ -9,10 +9,9 @@ export interface OfflineEntry {
 }
 
 class OfflineStorage {
-  // 🔥 AGREGAR ESTA LÍNEA: Declarar STORAGE_KEY como estática
   private static readonly STORAGE_KEY = 'journal_offline_v2';
   
-  // 🔥 AGREGAR ESTE MÉTODO: getAllEntries debe ser público o al menos existir
+  // Obtener todas las entradas
   static getAllEntries(): Record<string, OfflineEntry> {
     try {
       const data = localStorage.getItem(this.STORAGE_KEY);
@@ -112,31 +111,76 @@ class OfflineStorage {
     }
   }
   
-  // Verificar conexión REAL
+  // 🔥 VERIFICAR CONEXIÓN MEJORADO - NO SIEMPRE OFFLINE
   static async checkRealConnection(): Promise<boolean> {
     if (typeof navigator === 'undefined') return true;
     
-    if (!navigator.onLine) return false;
+    // 1. Primero el estado básico del navegador
+    if (!navigator.onLine) {
+      console.log('📴 Navegador reporta offline');
+      return false;
+    }
     
-    // Verificar conexión real con timeout corto
+    console.log('🌐 Navegador reporta online, verificando conexión real...');
+    
+    // 2. Lista de endpoints para probar (alguno debería responder)
+    const endpoints = [
+      'https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js',
+      'https://fonts.gstatic.com',
+      'https://unpkg.com',
+      window.location.origin // Tu propia app
+    ];
+    
+    // 3. Intentar cada endpoint
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        console.log(`🔄 Probando conexión con: ${endpoint}`);
+        
+        const response = await fetch(endpoint, {
+          method: 'HEAD',
+          mode: 'no-cors', // Importante: no-cors para evitar CORS
+          cache: 'no-cache',
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Si llegamos aquí, HAY CONEXIÓN
+        console.log(`✅ Conexión confirmada con: ${endpoint}`);
+        return true;
+        
+      } catch (error) {
+        // 🔥 CORRECCIÓN: Manejar error como unknown
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.log(`⚠️ No se pudo conectar a ${endpoint}:`, errorMessage);
+        // Continuar con el siguiente endpoint
+        continue;
+      }
+    }
+    
+    // 4. Último intento: ping simple
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-      
-      const response = await fetch('https://www.google.com/favicon.ico', {
-        method: 'HEAD',
-        cache: 'no-cache',
-        signal: controller.signal
+      console.log('🔄 Último intento: ping simple...');
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          console.log('✅ Ping exitoso');
+          resolve(true);
+        };
+        img.onerror = () => {
+          console.log('❌ Ping falló');
+          resolve(false);
+        };
+        img.src = 'https://www.google.com/images/phd/px.gif?t=' + Date.now();
       });
-      
-      clearTimeout(timeoutId);
-      return response.ok;
-    } catch {
+    } catch (error) {
+      console.log('❌ Todos los métodos fallaron, asumiendo offline');
       return false;
     }
   }
-
-  // 🔥 AGREGAR ESTOS MÉTODOS NUEVOS para journal-form.tsx
 
   // Serializar datos específicamente para campos HTML
   static serializeEntryData(data: any): any {

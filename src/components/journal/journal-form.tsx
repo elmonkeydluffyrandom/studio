@@ -61,12 +61,12 @@ interface JournalFormProps {
 
 // Función para normalizar contenido HTML del editor
 const normalizeEditorContent = (content: string | undefined): string => {
-  if (!content) return '<p></p>';
+  if (!content || content.trim() === '') return '<p></p>';
   
-  // Si ya es HTML, devolverlo
+  // Verificar si ya es HTML
   if (content.includes('<') && content.includes('>')) {
-    // Asegurar que tenga un párrafo contenedor
     const trimmed = content.trim();
+    // Si no empieza con etiqueta, agregar <p>
     if (!trimmed.startsWith('<')) {
       return `<p>${content}</p>`;
     }
@@ -75,6 +75,10 @@ const normalizeEditorContent = (content: string | undefined): string => {
   
   // Si es texto plano, convertirlo a HTML
   if (content.trim().length > 0) {
+    const paragraphs = content.split('\n').filter(p => p.trim());
+    if (paragraphs.length > 1) {
+      return paragraphs.map(p => `<p>${p}</p>`).join('');
+    }
     return `<p>${content.replace(/\n/g, '<br>')}</p>`;
   }
   
@@ -88,6 +92,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   const { user } = useUser();
   const firestore = useFirestore();
@@ -145,61 +150,92 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     },
   });
 
-  // Cargar datos iniciales - VERSIÓN MEJORADA con normalización
+  // Cargar datos iniciales - VERSIÓN ROBUSTA
   useEffect(() => {
-    if (entry) {
-      console.log('📖 Cargando entrada para editar:', {
-        id: entry.id,
-        observationRaw: entry.observation?.substring(0, 100),
-        teachingRaw: entry.teaching?.substring(0, 100),
-        practicalAppRaw: entry.practicalApplication?.substring(0, 100),
-      });
+    if (entry && entry.id) {
+      console.log('🔄 INICIANDO CARGA DE ENTRADA:', entry.id);
+      setIsLoading(true);
       
-      const parts = (entry.bibleVerse || '').split(':');
-      const verseOnly = parts.length > 1 ? parts[parts.length - 1] : entry.bibleVerse || '';
+      // Verificar datos REALES que llegan
+      console.log('📦 DATOS DE FIRESTORE:', {
+        bibleBook: entry.bibleBook,
+        chapter: entry.chapter,
+        bibleVerse: entry.bibleVerse,
+        observation: entry.observation ? '✅ Existe' : '❌ No existe',
+        observationLength: entry.observation?.length,
+        observationPreview: entry.observation?.substring(0, 50),
+        teaching: entry.teaching ? '✅ Existe' : '❌ No existe',
+        teachingLength: entry.teaching?.length,
+        practicalApplication: entry.practicalApplication ? '✅ Existe' : '❌ No existe',
+        practicalAppLength: entry.practicalApplication?.length,
+      });
 
-      // Normalizar contenido HTML antes de cargar
-      const normalizedObservation = normalizeEditorContent(entry.observation);
-      const normalizedTeaching = normalizeEditorContent(entry.teaching);
-      const normalizedPracticalApp = normalizeEditorContent(entry.practicalApplication);
+      // Extraer versículo (ej: "Juan 3:16" → "16")
+      let verseOnly = '';
+      if (entry.bibleVerse) {
+        const match = entry.bibleVerse.match(/:(\d+(-\d+)?)$/);
+        verseOnly = match ? match[1] : entry.bibleVerse.split(':').pop() || '';
+      }
 
-      // RESET con valores normalizados
-      form.reset({
+      // Normalizar contenido - FORZAR HTML
+      const observationContent = entry.observation || '';
+      const teachingContent = entry.teaching || '';
+      const practicalAppContent = entry.practicalApplication || '';
+
+      console.log('🛠️ CONTENIDO ANTES DE NORMALIZAR:', {
+        observation: observationContent.substring(0, 100),
+        teaching: teachingContent.substring(0, 100),
+        practicalApp: practicalAppContent.substring(0, 100),
+      });
+
+      const formData = {
         bibleBook: entry.bibleBook || '',
-        chapter: Number(entry.chapter) || undefined,
+        chapter: Number(entry.chapter) || 1,
         bibleVerse: verseOnly,
         verseText: entry.verseText || '',
         tagIds: entry.tagIds?.join(', ') || '',
-        
-        // CONTENIDO NORMALIZADO
-        observation: normalizedObservation,
-        teaching: normalizedTeaching,
-        practicalApplication: normalizedPracticalApp,
+        observation: normalizeEditorContent(observationContent),
+        teaching: normalizeEditorContent(teachingContent),
+        practicalApplication: normalizeEditorContent(practicalAppContent),
+      };
+
+      console.log('✅ DATOS PARA FORMULARIO:', {
+        bibleBook: formData.bibleBook,
+        chapter: formData.chapter,
+        observationLength: formData.observation.length,
+        teachingLength: formData.teaching.length,
+        practicalAppLength: formData.practicalApplication.length,
       });
-      
-      console.log('✅ Formulario cargado con contenido normalizado:', {
-        book: entry.bibleBook,
-        chapter: entry.chapter,
-        observationNormalized: normalizedObservation.substring(0, 100),
-        teachingNormalized: normalizedTeaching.substring(0, 100),
-      });
-      
-      // Debug adicional después de un momento
+
+      // Resetear formulario con delay para asegurar que el editor esté listo
       setTimeout(() => {
-        console.log('🔍 Valores después de reset:', {
-          observation: form.getValues('observation')?.substring(0, 100),
-          teaching: form.getValues('teaching')?.substring(0, 100),
-        });
-      }, 500);
+        form.reset(formData);
+        setIsLoading(false);
+        
+        // Verificar después de reset
+        setTimeout(() => {
+          const values = form.getValues();
+          console.log('🔍 VALORES DESPUÉS DE RESET:', {
+            bibleBook: values.bibleBook,
+            observationLength: values.observation?.length,
+            teachingLength: values.teaching?.length,
+            practicalAppLength: values.practicalApplication?.length,
+          });
+        }, 500);
+      }, 100);
+    } else if (!entry) {
+      setIsLoading(false);
     }
   }, [entry, form]);
 
-  // Detectar cambios para auto-guardado offline
+  // Detectar cambios
   const watchedValues = useWatch({ control: form.control });
   
   useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [watchedValues]);
+    if (entry && watchedValues) {
+      setHasUnsavedChanges(true);
+    }
+  }, [watchedValues, entry]);
 
   // Sincronizar pendientes
   const syncPending = useCallback(async () => {
@@ -219,7 +255,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
       for (const pending of pendingEntries) {
         try {
-          // Normalizar contenido antes de sincronizar
           const normalizedData = {
             ...pending.data,
             observation: normalizeEditorContent(pending.data.observation),
@@ -263,7 +298,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           duration: 4000,
         });
         
-        // Recargar la página para ver cambios
         setTimeout(() => {
           router.refresh();
         }, 1000);
@@ -290,7 +324,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     }
   }, [user, firestore, pendingCount, toast, router]);
 
-  // Función de guardado PRINCIPAL - VERSIÓN MEJORADA
+  // Guardado principal
   const handleSave = async (data: JournalFormValues): Promise<{success: boolean; offline: boolean}> => {
     if (!user || !firestore) {
       toast({
@@ -304,14 +338,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     setIsSaving(true);
 
     try {
-      // Preparar datos con contenido normalizado
       const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
       const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
-      
-      // Normalizar contenido HTML antes de guardar
-      const normalizedObservation = normalizeEditorContent(data.observation);
-      const normalizedTeaching = normalizeEditorContent(data.teaching);
-      const normalizedPracticalApp = normalizeEditorContent(data.practicalApplication);
       
       const entryData = {
         bibleBook: data.bibleBook,
@@ -319,33 +347,16 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         bibleVerse: fullBibleVerse,
         verseText: data.verseText,
         tagIds: tags,
-        
-        // CONTENIDO NORMALIZADO
-        observation: normalizedObservation,
-        teaching: normalizedTeaching,
-        practicalApplication: normalizedPracticalApp,
-        
+        observation: normalizeEditorContent(data.observation),
+        teaching: normalizeEditorContent(data.teaching),
+        practicalApplication: normalizeEditorContent(data.practicalApplication),
         userId: user.uid,
         updatedAt: Timestamp.now()
       };
 
-      // Debug: mostrar datos que se van a guardar
-      console.log('💾 Datos preparados para guardar:', {
-        observation: entryData.observation?.substring(0, 100),
-        teaching: entryData.teaching?.substring(0, 100),
-        isHTML: {
-          obs: entryData.observation?.includes('<'),
-          teach: entryData.teaching?.includes('<')
-        }
-      });
-
       const isConnected = await OfflineStorage.checkRealConnection();
       
       if (!isConnected) {
-        // 🔥 MODO OFFLINE: Guardar en localStorage
-        console.log('📴 Guardando en modo offline...');
-        
-        // Usar saveEntryEnhanced que maneja mejor la serialización
         const offlineId = OfflineStorage.saveEntryEnhanced({
           id: entry?.id || '',
           type: isEditing ? 'update' : 'create',
@@ -353,24 +364,18 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           userId: user.uid
         });
         
-        // GUARDADO DE EMERGENCIA EXTRA
         OfflineStorage.forceSave(`emergency_${Date.now()}`, entryData);
         
-        // Actualizar contador
         const newPending = OfflineStorage.getPendingEntries(user.uid);
         setPendingCount(newPending.length);
-        
-        // Marcar que ya no hay cambios sin guardar
         setHasUnsavedChanges(false);
         
-        // Mostrar mensaje OFFLINE
         toast({
           title: "📱 Guardado offline exitoso",
           description: "Los cambios se guardaron en tu dispositivo.",
           duration: 5000,
         });
         
-        // NO REDIRIGIR INMEDIATAMENTE - dar opción
         setTimeout(() => {
           toast({
             title: "¿Qué deseas hacer?",
@@ -382,7 +387,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                   size="sm" 
                   variant="default"
                   onClick={() => {
-                    // Mantener en la misma página
                     form.reset();
                     setHasUnsavedChanges(false);
                   }}
@@ -405,9 +409,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         return { success: true, offline: true };
       }
 
-      // 🔥 MODO ONLINE: Guardar en Firebase
-      console.log('🟢 Guardando en Firebase...');
-      
       try {
         if (isEditing && entry?.id) {
           const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
@@ -420,14 +421,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           });
         }
         
-        // Éxito online
         toast({
           title: "✅ ¡Guardado!",
           description: "Tu entrada se ha guardado exitosamente.",
           duration: 4000,
         });
         
-        // Esperar y redirigir
         setTimeout(() => {
           if (onSave) onSave();
           if (!isModal) {
@@ -441,7 +440,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       } catch (firebaseError) {
         console.error('Error Firebase:', firebaseError);
         
-        // Si Firebase falla, guardar offline
         const offlineId = OfflineStorage.saveEntryEnhanced({
           id: entry?.id || '',
           type: isEditing ? 'update' : 'create',
@@ -464,7 +462,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     } catch (error: any) {
       console.error("❌ Error crítico en handleSave:", error);
       
-      // ÚLTIMO RECURSO: Guardar en localStorage simple
       try {
         localStorage.setItem(`last_resort_${Date.now()}`, JSON.stringify({
           formData: data,
@@ -499,7 +496,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     await handleSave(data);
   };
 
-  // Componente de estado
   const StatusIndicator = () => {
     if (isSaving) {
       return (
@@ -526,6 +522,24 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       </span>
     );
   };
+
+  // Mostrar loading mientras se cargan datos
+  if (isLoading && isEditing) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Cargando entrada...</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
+            <div className="h-4 bg-muted rounded w-1/2 animate-pulse"></div>
+            <div className="h-32 bg-muted rounded animate-pulse"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const formContent = (
     <Form {...form}>
@@ -576,12 +590,13 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                 <FormLabel>Libro *</FormLabel>
                 <Select 
                   onValueChange={field.onChange} 
-                  value={field.value}
+                  value={field.value || ""}
+                  defaultValue={field.value || ""}
                 >
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background">
                       <SelectValue placeholder="Selecciona un libro">
-                        {field.value ? field.value : "Selecciona un libro"}
+                        {field.value || "Selecciona un libro"}
                       </SelectValue>
                     </SelectTrigger>
                   </FormControl>
@@ -606,7 +621,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                   <Input 
                     type="number" 
                     placeholder="Ej: 23" 
-                    value={field.value || ''}
+                    value={field.value || ""}
                     onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
                   />
                 </FormControl>
@@ -622,7 +637,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               <FormItem className="sm:col-span-2">
                 <FormLabel>Versículos *</FormLabel>
                 <FormControl>
-                  <Input placeholder="Ej: 1-4" {...field} />
+                  <Input placeholder="Ej: 1-4" {...field} value={field.value || ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -641,6 +656,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                   placeholder="Escribe el texto del versículo..."
                   className="min-h-[100px] font-serif"
                   {...field}
+                  value={field.value || ""}
                 />
               </FormControl>
               <FormMessage />
@@ -657,15 +673,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               <FormControl>
                 <div className="min-h-[150px]">
                   <RichTextEditor
-                    value={field.value}
+                    value={field.value || '<p></p>'}
                     onChange={field.onChange}
                     placeholder="¿Qué dice el texto?..."
                   />
                 </div>
               </FormControl>
-              <FormDescription className="text-xs text-muted-foreground">
-                Puedes usar negrita, cursiva y listas en el editor
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -680,15 +693,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               <FormControl>
                 <div className="min-h-[150px]">
                   <RichTextEditor
-                    value={field.value}
+                    value={field.value || '<p></p>'}
                     onChange={field.onChange}
                     placeholder="¿Qué verdad espiritual...?"
                   />
                 </div>
               </FormControl>
-              <FormDescription className="text-xs text-muted-foreground">
-                Usa el editor para formatear tu enseñanza
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -703,15 +713,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               <FormControl>
                 <div className="min-h-[150px]">
                   <RichTextEditor
-                    value={field.value}
+                    value={field.value || '<p></p>'}
                     onChange={field.onChange}
                     placeholder="¿Cómo puedo poner por obra...?"
                   />
                 </div>
               </FormControl>
-              <FormDescription className="text-xs text-muted-foreground">
-                Formatea tu aplicación práctica
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -724,7 +731,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
               <FormLabel>Etiquetas</FormLabel>
               <FormControl>
-                <Input placeholder="Oración, Familia, Fe" {...field} />
+                <Input placeholder="Oración, Familia, Fe" {...field} value={field.value || ""} />
               </FormControl>
               <FormDescription>Separa con comas</FormDescription>
               <FormMessage />
