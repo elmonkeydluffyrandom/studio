@@ -1,10 +1,11 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import {
   Form,
   FormControl,
@@ -25,13 +26,19 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, WifiOff, CheckCircle2, RefreshCw, AlertCircle, BookOpen } from 'lucide-react';
+import { Loader2, Save, WifiOff, CheckCircle2, RefreshCw, BookOpen } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, addDoc, setDoc, Timestamp, collection } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FirebaseOffline } from '@/lib/firebaseOffline';
+import OfflineStorage from '@/lib/offlineStorage';
+
+// Carga dinámica del editor rico
+const RichTextEditor = dynamic(() => import('../rich-text-editor').then((mod) => mod.RichTextEditor), {
+  ssr: false,
+  loading: () => <div className="border rounded-md p-4 min-h-[150px] bg-muted animate-pulse" />
+});
 
 const FormSchema = z.object({
   bibleBook: z.string().min(1, 'El libro es requerido.'),
@@ -57,56 +64,50 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  const [saveHistory, setSaveHistory] = useState<Array<{time: Date; offline: boolean; success: boolean}>>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   const { user } = useUser();
   const firestore = useFirestore();
   const isEditing = !!entry;
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Detectar conexión
+  // Detectar conexión en tiempo real
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      console.log('✅ Conexión restablecida');
-    };
-    
-    const handleOffline = () => {
-      setIsOnline(false);
-      console.log('📴 Sin conexión');
+    const updateOnlineStatus = async () => {
+      const online = await OfflineStorage.checkRealConnection();
+      setIsOnline(online);
+      
+      if (!online) {
+        toast({
+          title: "📱 Modo offline",
+          description: "Trabajando sin conexión",
+          duration: 3000,
+        });
+      }
     };
 
-    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    updateOnlineStatus();
+    
+    const handleOnline = () => updateOnlineStatus();
+    const handleOffline = () => updateOnlineStatus();
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    
+    // Actualizar contador de pendientes
+    if (user) {
+      const pending = OfflineStorage.getPendingEntries(user.uid);
+      setPendingCount(pending.length);
+    }
+    
+    // Limpiar viejos
+    OfflineStorage.cleanupOldEntries();
     
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
-
-  // Verificar pendientes periódicamente
-  useEffect(() => {
-    const checkPending = () => {
-      if (typeof window !== 'undefined') {
-        try {
-          const pendingData = localStorage.getItem('journal_pending_sync');
-          const pending = pendingData ? JSON.parse(pendingData) : [];
-          setPendingSyncCount(pending.length);
-        } catch (error) {
-          console.error('Error checking pending:', error);
-        }
-      }
-    };
-
-    checkPending();
-    const interval = setInterval(checkPending, 10000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  }, [toast, user]);
 
   const form = useForm<JournalFormValues>({
     resolver: zodResolver(FormSchema),
@@ -122,12 +123,15 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     },
   });
 
-  // Cargar datos
+  // Cargar datos iniciales - FIXED: Mantiene el libro seleccionado
   useEffect(() => {
     if (entry) {
-      const parts = entry.bibleVerse?.split(':') || [];
+      console.log('📖 Cargando entrada:', entry.bibleBook, entry.chapter);
+      
+      const parts = (entry.bibleVerse || '').split(':');
       const verseOnly = parts.length > 1 ? parts[parts.length - 1] : entry.bibleVerse || '';
 
+      // RESET completo con todos los valores
       form.reset({
         bibleBook: entry.bibleBook || '',
         chapter: Number(entry.chapter) || undefined,
@@ -138,68 +142,104 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         teaching: entry.teaching || '',
         practicalApplication: entry.practicalApplication || '',
       });
+      
+      console.log('✅ Formulario cargado con:', {
+        book: entry.bibleBook,
+        chapter: entry.chapter,
+        verse: verseOnly
+      });
     }
   }, [entry, form]);
 
+  // Detectar cambios para auto-guardado offline
+  const watchedValues = useWatch({ control: form.control });
+  
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [watchedValues]);
+
   // Sincronizar pendientes
   const syncPending = useCallback(async () => {
-    if (!user || !firestore || pendingSyncCount === 0) return;
+    if (!user || !firestore || pendingCount === 0) return;
 
     setIsSaving(true);
     
     toast({
       title: "🔄 Sincronizando...",
-      description: `Sincronizando ${pendingSyncCount} cambios pendientes`,
+      description: `Sincronizando ${pendingCount} cambios pendientes`,
     });
 
     try {
-      const result = await FirebaseOffline.syncPendingEntries(
-        firestore,
-        user.uid,
-        (current, total) => {
-          console.log(`Progreso: ${current}/${total}`);
+      const pendingEntries = OfflineStorage.getPendingEntries(user.uid);
+      let synced = 0;
+      let failed = 0;
+
+      for (const pending of pendingEntries) {
+        try {
+          if (pending.type === 'update' && pending.data.id) {
+            const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', pending.data.id);
+            await setDoc(entryRef, {
+              ...pending.data,
+              updatedAt: Timestamp.now(),
+              _syncedFromOffline: true
+            }, { merge: true });
+          } else if (pending.type === 'create') {
+            const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
+            await addDoc(entriesCollection, {
+              ...pending.data,
+              createdAt: Timestamp.now(),
+              _syncedFromOffline: true
+            });
+          }
+          
+          OfflineStorage.markAsSynced(pending.id);
+          synced++;
+          
+        } catch (error) {
+          console.error('Error sincronizando:', error);
+          OfflineStorage.markAsFailed(pending.id);
+          failed++;
         }
-      );
+      }
 
-      setPendingSyncCount(result.failed);
+      const newPending = OfflineStorage.getPendingEntries(user.uid);
+      setPendingCount(newPending.length);
 
-      if (result.synced > 0) {
+      if (synced > 0) {
         toast({
           title: "✅ Sincronizado",
-          description: `${result.synced} cambios sincronizados exitosamente`,
+          description: `${synced} cambios sincronizados exitosamente`,
           duration: 4000,
         });
         
-        // Agregar al historial
-        setSaveHistory(prev => [...prev, {
-          time: new Date(),
-          offline: false,
-          success: true
-        }]);
+        // Recargar la página para ver cambios
+        setTimeout(() => {
+          router.refresh();
+        }, 1000);
       }
 
-      if (result.failed > 0) {
+      if (failed > 0) {
         toast({
           variant: "destructive",
-          title: "⚠️ Sincronización parcial",
-          description: `${result.failed} cambios no se pudieron sincronizar`,
+          title: "⚠️ Algunos cambios fallaron",
+          description: `${failed} cambios no se pudieron sincronizar`,
           duration: 5000,
         });
       }
 
     } catch (error) {
-      console.error('Error sincronizando:', error);
+      console.error('Error general sincronizando:', error);
       toast({
         variant: "destructive",
-        title: "❌ Error",
+        title: "❌ Error de sincronización",
         description: "No se pudo completar la sincronización",
       });
     } finally {
       setIsSaving(false);
     }
-  }, [user, firestore, pendingSyncCount, toast]);
+  }, [user, firestore, pendingCount, toast, router]);
 
-  // Función principal de guardado - FIXED
+  // Función de guardado PRINCIPAL - FIXED
   const handleSave = async (data: JournalFormValues): Promise<{success: boolean; offline: boolean}> => {
     if (!user || !firestore) {
       toast({
@@ -212,168 +252,181 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
 
     setIsSaving(true);
 
-    return new Promise((resolve) => {
+    try {
+      // Preparar datos
+      const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
+      const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
+      
+      const entryData = {
+        bibleBook: data.bibleBook,
+        chapter: data.chapter,
+        bibleVerse: fullBibleVerse,
+        verseText: data.verseText,
+        tagIds: tags,
+        observation: data.observation,
+        teaching: data.teaching,
+        practicalApplication: data.practicalApplication,
+        userId: user.uid,
+        updatedAt: Timestamp.now()
+      };
+
+      const isConnected = await OfflineStorage.checkRealConnection();
+      
+      if (!isConnected) {
+        // 🔥 MODO OFFLINE: Guardar en localStorage PRIMERO
+        console.log('📴 Guardando en modo offline...');
+        
+        const offlineId = OfflineStorage.saveEntry({
+          id: entry?.id || '',
+          type: isEditing ? 'update' : 'create',
+          data: entryData,
+          userId: user.uid
+        });
+        
+        // GUARDADO DE EMERGENCIA EXTRA
+        OfflineStorage.forceSave(`emergency_${Date.now()}`, entryData);
+        
+        // Actualizar contador
+        const newPending = OfflineStorage.getPendingEntries(user.uid);
+        setPendingCount(newPending.length);
+        
+        // Marcar que ya no hay cambios sin guardar
+        setHasUnsavedChanges(false);
+        
+        // Mostrar mensaje OFFLINE
+        toast({
+          title: "📱 Guardado offline exitoso",
+          description: "Los cambios se guardaron en tu dispositivo.",
+          duration: 5000,
+        });
+        
+        // NO REDIRIGIR INMEDIATAMENTE - dar opción
+        setTimeout(() => {
+          toast({
+            title: "¿Qué deseas hacer?",
+            description: "Tus cambios están guardados localmente",
+            duration: 8000,
+            action: (
+              <div className="flex flex-col gap-2 mt-2">
+                <Button 
+                  size="sm" 
+                  variant="default"
+                  onClick={() => {
+                    // Mantener en la misma página
+                    form.reset();
+                    setHasUnsavedChanges(false);
+                  }}
+                >
+                  Crear otra entrada
+                </Button>
+                <Button 
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push('/journal')}
+                >
+                  Ver todas las entradas
+                </Button>
+              </div>
+            ),
+          });
+        }, 1000);
+        
+        setIsSaving(false);
+        return { success: true, offline: true };
+      }
+
+      // 🔥 MODO ONLINE: Guardar en Firebase
+      console.log('🟢 Guardando en Firebase...');
+      
       try {
-        // Preparar datos
-        const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
-        const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
+        if (isEditing && entry?.id) {
+          const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
+          await setDoc(entryRef, entryData, { merge: true });
+        } else {
+          const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
+          await addDoc(entriesCollection, { 
+            ...entryData, 
+            createdAt: Timestamp.now() 
+          });
+        }
         
-        const entryData = {
-          bibleBook: data.bibleBook,
-          chapter: data.chapter,
-          bibleVerse: fullBibleVerse,
-          verseText: data.verseText,
-          tagIds: tags,
-          observation: data.observation,
-          teaching: data.teaching,
-          practicalApplication: data.practicalApplication,
-          userId: user.uid,
-          updatedAt: Timestamp.now()
-        };
-
-        // Preparar función de guardado
-        const saveFunction = async () => {
-          if (isEditing && entry?.id) {
-            const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-            return await setDoc(entryRef, entryData, { merge: true });
-          } else {
-            const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-            return await addDoc(entriesCollection, { 
-              ...entryData, 
-              createdAt: Timestamp.now() 
-            });
-          }
-        };
-
-        // Usar callback para manejar resultado
-        FirebaseOffline.saveEntryWithCallback(
-          firestore,
-          user.uid,
-          saveFunction,
-          entryData,
-          entry?.id,
-          (result) => {
-            // AGREGAR AL HISTORIAL
-            setSaveHistory(prev => [...prev, {
-              time: new Date(),
-              offline: result.offline,
-              success: result.success
-            }]);
-
-            // ACTUALIZAR CONTADOR
-            if (result.offline) {
-              setPendingSyncCount(prev => prev + 1);
-            }
-
-            // MOSTRAR MENSAJE
-            if (result.offline) {
-              toast({
-                title: "📱 Guardado local",
-                description: "Los cambios se guardaron en tu dispositivo. Se sincronizarán automáticamente.",
-                duration: 6000,
-              });
-            } else {
-              toast({
-                title: "✅ ¡Guardado!",
-                description: "Tu entrada se ha guardado exitosamente.",
-                duration: 4000,
-              });
-            }
-
-            setIsSaving(false);
-            resolve({ success: result.success, offline: result.offline });
-
-            // SOLO REDIRIGIR SI ES ONLINE Y ÉXITO
-            if (result.success && !result.offline) {
-              // Pequeño delay antes de redirigir
-              setTimeout(() => {
-                if (onSave) onSave();
-                if (!isModal) {
-                  router.push('/journal');
-                }
-              }, 1500);
-            }
-          },
-          (error) => {
-            console.error('Error en callback:', error);
-            
-            // Guardado de emergencia
-            const emergencyKey = `emergency_${Date.now()}`;
-            localStorage.setItem(emergencyKey, JSON.stringify({
-              formData: data,
-              timestamp: Date.now(),
-              error: error.message
-            }));
-            
-            toast({
-              title: "⚠️ Guardado de emergencia",
-              description: "Los cambios se guardaron localmente como precaución.",
-              duration: 6000,
-            });
-            
-            setSaveHistory(prev => [...prev, {
-              time: new Date(),
-              offline: true,
-              success: true
-            }]);
-            
-            setIsSaving(false);
-            resolve({ success: true, offline: true });
-          }
-        );
-
-      } catch (error: any) {
-        console.error("Error en handleSave:", error);
+        // Éxito online
+        toast({
+          title: "✅ ¡Guardado!",
+          description: "Tu entrada se ha guardado exitosamente.",
+          duration: 4000,
+        });
         
+        // Esperar y redirigir
+        setTimeout(() => {
+          if (onSave) onSave();
+          if (!isModal) {
+            router.push('/journal');
+          }
+        }, 1500);
+        
+        setIsSaving(false);
+        return { success: true, offline: false };
+        
+      } catch (firebaseError) {
+        console.error('Error Firebase:', firebaseError);
+        
+        // Si Firebase falla, guardar offline
+        const offlineId = OfflineStorage.saveEntry({
+          id: entry?.id || '',
+          type: isEditing ? 'update' : 'create',
+          data: entryData,
+          userId: user.uid
+        });
+        
+        setPendingCount(prev => prev + 1);
+        
+        toast({
+          title: "⚠️ Guardado local",
+          description: "Se guardó localmente por error de conexión.",
+          duration: 5000,
+        });
+        
+        setIsSaving(false);
+        return { success: true, offline: true };
+      }
+
+    } catch (error: any) {
+      console.error("❌ Error crítico en handleSave:", error);
+      
+      // ÚLTIMO RECURSO: Guardar en localStorage simple
+      try {
+        localStorage.setItem(`last_resort_${Date.now()}`, JSON.stringify({
+          formData: data,
+          timestamp: Date.now(),
+          userId: user?.uid
+        }));
+        
+        toast({
+          title: "🆘 Guardado de emergencia",
+          description: "Los cambios se guardaron como precaución.",
+          duration: 6000,
+        });
+        
+        setIsSaving(false);
+        return { success: true, offline: true };
+        
+      } catch (emergencyError) {
         toast({
           variant: "destructive",
           title: "❌ Error crítico",
-          description: "No se pudo guardar. Intenta copiar tu contenido.",
+          description: "No se pudo guardar. Copia tu contenido.",
           duration: 7000,
         });
         
         setIsSaving(false);
-        resolve({ success: false, offline: false });
+        return { success: false, offline: false };
       }
-    });
+    }
   };
 
   const onSubmit = async (data: JournalFormValues) => {
-    // Limpiar timeout anterior
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    const result = await handleSave(data);
-    
-    // Si es offline, NO redirigir inmediatamente
-    if (result.offline && !isModal) {
-      // Esperar 3 segundos antes de mostrar opción de volver
-      saveTimeoutRef.current = setTimeout(() => {
-        toast({
-          title: "¿Qué quieres hacer?",
-          description: "Los cambios se guardaron localmente.",
-          duration: 8000,
-          action: (
-            <div className="flex gap-2 mt-2">
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => router.push('/journal')}
-              >
-                Ver entradas
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => window.location.reload()}
-              >
-                Seguir editando
-              </Button>
-            </div>
-          ),
-        });
-      }, 3000);
-    }
+    await handleSave(data);
   };
 
   // Componente de estado
@@ -382,7 +435,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       return (
         <span className="text-xs text-blue-600 flex items-center gap-1">
           <Loader2 className="h-3 w-3 animate-spin"/>
-          {isOnline ? 'Guardando...' : 'Guardando localmente...'}
+          {isOnline ? 'Guardando...' : 'Guardando offline...'}
         </span>
       );
     }
@@ -391,7 +444,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       return (
         <span className="text-xs text-amber-600 flex items-center gap-1">
           <WifiOff className="h-3 w-3"/>
-          Offline {pendingSyncCount > 0 && `(${pendingSyncCount} pendientes)`}
+          Offline
         </span>
       );
     }
@@ -399,7 +452,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     return (
       <span className="text-xs text-green-600 flex items-center gap-1">
         <CheckCircle2 className="h-3 w-3"/>
-        En línea {pendingSyncCount > 0 && `(${pendingSyncCount} pendientes)`}
+        En línea
       </span>
     );
   };
@@ -412,38 +465,36 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         <div className="flex flex-wrap justify-between items-center bg-muted/30 p-3 rounded-md mb-4 gap-2">
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Diario Bíblico</span>
+            <span className="text-sm font-medium text-muted-foreground">
+              {isEditing ? 'Editar Entrada' : 'Nueva Entrada'}
+            </span>
           </div>
           
           <div className="flex items-center gap-4">
             <StatusIndicator />
             
-            {pendingSyncCount > 0 && isOnline && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={syncPending}
-                disabled={isSaving}
-                className="text-xs h-7"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Sincronizar
-              </Button>
+            {pendingCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-amber-600">
+                  {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
+                </span>
+                {isOnline && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={syncPending}
+                    disabled={isSaving}
+                    className="text-xs h-7"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Sincronizar
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>
-
-        {/* Historial reciente */}
-        {saveHistory.length > 0 && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-sm text-blue-800">
-              📋 Historial: {saveHistory.filter(s => s.success).length} guardados exitosos
-              {saveHistory.filter(s => s.offline).length > 0 && 
-                ` (${saveHistory.filter(s => s.offline).length} offline)`}
-            </p>
-          </div>
-        )}
 
         {/* Campos del formulario */}
         <div className="grid grid-cols-1 sm:grid-cols-6 sm:gap-4 space-y-6 sm:space-y-0">
@@ -453,10 +504,15 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             render={({ field }) => (
               <FormItem className="sm:col-span-3">
                 <FormLabel>Libro *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select 
+                  onValueChange={field.onChange} 
+                  value={field.value} // ✅ FIXED: Usar value en lugar de defaultValue
+                >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un libro" />
+                      <SelectValue placeholder="Selecciona un libro">
+                        {field.value ? field.value : "Selecciona un libro"}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -529,11 +585,13 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
               <FormLabel>Observación (O - Observation) *</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="¿Qué dice el texto?..."
-                  className="min-h-[100px]"
-                  {...field}
-                />
+                <div className="min-h-[150px]">
+                  <RichTextEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="¿Qué dice el texto?..."
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -547,11 +605,13 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
               <FormLabel>Enseñanza *</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="¿Qué verdad espiritual...?"
-                  className="min-h-[100px]"
-                  {...field}
-                />
+                <div className="min-h-[150px]">
+                  <RichTextEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="¿Qué verdad espiritual...?"
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -565,11 +625,13 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
               <FormLabel>Aplicación Práctica *</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="¿Cómo puedo poner por obra...?"
-                  className="min-h-[100px]"
-                  {...field}
-                />
+                <div className="min-h-[150px]">
+                  <RichTextEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="¿Cómo puedo poner por obra...?"
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -594,7 +656,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         <div className="flex flex-col sm:flex-row justify-end gap-3 items-center pt-6 border-t">
           <div className="text-sm text-muted-foreground mr-0 sm:mr-4">
             {isOnline ? '✅ Conectado' : '📱 Modo offline'}
-            {pendingSyncCount > 0 && ` • ${pendingSyncCount} pendientes`}
+            {pendingCount > 0 && ` • ${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''}`}
           </div>
 
           <div className="flex gap-2 w-full sm:w-auto">
@@ -602,8 +664,10 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               type="button" 
               variant="outline" 
               onClick={() => {
-                if (isModal && onSave) {
-                  onSave();
+                if (hasUnsavedChanges) {
+                  if (confirm('¿Salir sin guardar los cambios?')) {
+                    router.push('/journal');
+                  }
                 } else {
                   router.push('/journal');
                 }
