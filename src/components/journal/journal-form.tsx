@@ -1,57 +1,50 @@
 'use client';
 
-import { useForm, useWatch } from 'react-hook-form';
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, WifiOff, CheckCircle2, RefreshCw, BookOpen } from 'lucide-react';
+} from '@/components/ui/select';
+import { BIBLE_BOOKS } from '@/lib/bible-books';
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, addDoc, setDoc, Timestamp, collection } from 'firebase/firestore';
-import { BIBLE_BOOKS } from '@/lib/bible-books';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import OfflineStorage from '@/lib/offlineStorage';
+import { doc, setDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
+import { ScrollArea } from '../ui/scroll-area';
 
-// Carga dinámica del editor rico
-const RichTextEditor = dynamic(() => import('../rich-text-editor').then((mod) => mod.RichTextEditor), {
-  ssr: false,
-  loading: () => <div className="border rounded-md p-4 min-h-[150px] bg-muted animate-pulse" />
-});
-
-const FormSchema = z.object({
+const formSchema = z.object({
   bibleBook: z.string().min(1, 'El libro es requerido.'),
   chapter: z.coerce.number().min(1, 'El capítulo es requerido.'),
-  bibleVerse: z.string().min(1, 'La cita es requerida.'),
-  verseText: z.string().min(10, 'El texto del versículo es requerido.'),
-  observation: z.string().min(15, 'La observación es requerida.'),
-  teaching: z.string().min(15, 'La enseñanza es requerida.'),
-  practicalApplication: z.string().min(15, 'La aplicación práctica es requerida.'),
+  bibleVerse: z.string().min(1, 'El versículo es requerido.'),
+  verseText: z.string().min(1, 'El texto del versículo es requerido.'),
+  observation: z.string().optional(),
+  teaching: z.string().optional(),
+  practicalApplication: z.string().optional(),
   tagIds: z.string().optional(),
 });
 
-type JournalFormValues = z.infer<typeof FormSchema>;
+type JournalFormData = z.infer<typeof formSchema>;
 
 interface JournalFormProps {
   entry?: JournalEntry;
@@ -59,88 +52,17 @@ interface JournalFormProps {
   isModal?: boolean;
 }
 
-// Función para normalizar contenido HTML del editor
-const normalizeEditorContent = (content: string | undefined): string => {
-  if (!content || content.trim() === '') return '<p></p>';
-  
-  // Verificar si ya es HTML
-  if (content.includes('<') && content.includes('>')) {
-    const trimmed = content.trim();
-    // Si no empieza con etiqueta, agregar <p>
-    if (!trimmed.startsWith('<')) {
-      return `<p>${content}</p>`;
-    }
-    return content;
-  }
-  
-  // Si es texto plano, convertirlo a HTML
-  if (content.trim().length > 0) {
-    const paragraphs = content.split('\n').filter(p => p.trim());
-    if (paragraphs.length > 1) {
-      return paragraphs.map(p => `<p>${p}</p>`).join('');
-    }
-    return `<p>${content.replace(/\n/g, '<br>')}</p>`;
-  }
-  
-  return '<p></p>';
-};
-
 export default function JournalForm({ entry, onSave, isModal = false }: JournalFormProps) {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  
   const { user } = useUser();
   const firestore = useFirestore();
-  const isEditing = !!entry;
+  const router = useRouter();
+  const { toast } = useToast();
 
-  // Detectar conexión en tiempo real
-  useEffect(() => {
-    const updateOnlineStatus = async () => {
-      const online = await OfflineStorage.checkRealConnection();
-      setIsOnline(online);
-      
-      if (!online) {
-        toast({
-          title: "📱 Modo offline",
-          description: "Trabajando sin conexión",
-          duration: 3000,
-        });
-      }
-    };
-
-    updateOnlineStatus();
-    
-    const handleOnline = () => updateOnlineStatus();
-    const handleOffline = () => updateOnlineStatus();
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    // Actualizar contador de pendientes
-    if (user) {
-      const pending = OfflineStorage.getPendingEntries(user.uid);
-      setPendingCount(pending.length);
-    }
-    
-    // Limpiar viejos
-    OfflineStorage.cleanupOldEntries();
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [toast, user]);
-
-  const form = useForm<JournalFormValues>({
-    resolver: zodResolver(FormSchema),
+  const form = useForm<JournalFormData>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       bibleBook: '',
-      chapter: undefined,
+      chapter: 1,
       bibleVerse: '',
       verseText: '',
       observation: '',
@@ -150,513 +72,155 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     },
   });
 
-  // Cargar datos iniciales - VERSIÓN ROBUSTA
   useEffect(() => {
-    if (entry && entry.id) {
-      console.log('🔄 INICIANDO CARGA DE ENTRADA:', entry.id);
-      setIsLoading(true);
-      
-      // Verificar datos REALES que llegan
-      console.log('📦 DATOS DE FIRESTORE:', {
+    if (entry) {
+      console.log('Cargando datos en editor...', entry);
+      const valuesToSet: Partial<JournalFormData> = {
         bibleBook: entry.bibleBook,
         chapter: entry.chapter,
         bibleVerse: entry.bibleVerse,
-        observation: entry.observation ? '✅ Existe' : '❌ No existe',
-        observationLength: entry.observation?.length,
-        observationPreview: entry.observation?.substring(0, 50),
-        teaching: entry.teaching ? '✅ Existe' : '❌ No existe',
-        teachingLength: entry.teaching?.length,
-        practicalApplication: entry.practicalApplication ? '✅ Existe' : '❌ No existe',
-        practicalAppLength: entry.practicalApplication?.length,
-      });
-
-      // Extraer versículo (ej: "Juan 3:16" → "16")
-      let verseOnly = '';
-      if (entry.bibleVerse) {
-        const match = entry.bibleVerse.match(/:(\d+(-\d+)?)$/);
-        verseOnly = match ? match[1] : entry.bibleVerse.split(':').pop() || '';
-      }
-
-      // Normalizar contenido - FORZAR HTML
-      const observationContent = entry.observation || '';
-      const teachingContent = entry.teaching || '';
-      const practicalAppContent = entry.practicalApplication || '';
-
-      console.log('🛠️ CONTENIDO ANTES DE NORMALIZAR:', {
-        observation: observationContent.substring(0, 100),
-        teaching: teachingContent.substring(0, 100),
-        practicalApp: practicalAppContent.substring(0, 100),
-      });
-
-      const formData = {
-        bibleBook: entry.bibleBook || '',
-        chapter: Number(entry.chapter) || 1,
-        bibleVerse: verseOnly,
-        verseText: entry.verseText || '',
-        tagIds: entry.tagIds?.join(', ') || '',
-        observation: normalizeEditorContent(observationContent),
-        teaching: normalizeEditorContent(teachingContent),
-        practicalApplication: normalizeEditorContent(practicalAppContent),
+        verseText: entry.verseText,
+        observation: entry.observation,
+        teaching: entry.teaching,
+        practicalApplication: entry.practicalApplication,
+        tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
       };
-
-      console.log('✅ DATOS PARA FORMULARIO:', {
-        bibleBook: formData.bibleBook,
-        chapter: formData.chapter,
-        observationLength: formData.observation.length,
-        teachingLength: formData.teaching.length,
-        practicalAppLength: formData.practicalApplication.length,
-      });
-
-      // Resetear formulario con delay para asegurar que el editor esté listo
-      setTimeout(() => {
-        form.reset(formData);
-        setIsLoading(false);
-        
-        // Verificar después de reset
-        setTimeout(() => {
-          const values = form.getValues();
-          console.log('🔍 VALORES DESPUÉS DE RESET:', {
-            bibleBook: values.bibleBook,
-            observationLength: values.observation?.length,
-            teachingLength: values.teaching?.length,
-            practicalAppLength: values.practicalApplication?.length,
-          });
-        }, 500);
-      }, 100);
-    } else if (!entry) {
-      setIsLoading(false);
+      form.reset(valuesToSet);
     }
   }, [entry, form]);
 
-  // Detectar cambios
-  const watchedValues = useWatch({ control: form.control });
-  
-  useEffect(() => {
-    if (entry && watchedValues) {
-      setHasUnsavedChanges(true);
+  const onSubmit = async (data: JournalFormData) => {
+    if (!user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error de autenticación',
+        description: 'No se pudo guardar la entrada.',
+      });
+      return;
     }
-  }, [watchedValues, entry]);
-
-  // Sincronizar pendientes
-  const syncPending = useCallback(async () => {
-    if (!user || !firestore || pendingCount === 0) return;
-
-    setIsSaving(true);
-    
-    toast({
-      title: "🔄 Sincronizando...",
-      description: `Sincronizando ${pendingCount} cambios pendientes`,
-    });
 
     try {
-      const pendingEntries = OfflineStorage.getPendingEntries(user.uid);
-      let synced = 0;
-      let failed = 0;
+      const entryData = {
+        ...data,
+        userId: user.uid,
+        tagIds: data.tagIds ? data.tagIds.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+        updatedAt: serverTimestamp(),
+        // Normaliza los campos para consistencia
+        observacion: data.observation,
+        ensenanza: data.teaching,
+        aplicacion: data.practicalApplication,
+      };
 
-      for (const pending of pendingEntries) {
-        try {
-          const normalizedData = {
-            ...pending.data,
-            observation: normalizeEditorContent(pending.data.observation),
-            teaching: normalizeEditorContent(pending.data.teaching),
-            practicalApplication: normalizeEditorContent(pending.data.practicalApplication),
-          };
+      let entryId: string;
 
-          if (pending.type === 'update' && pending.data.id) {
-            const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', pending.data.id);
-            await setDoc(entryRef, {
-              ...normalizedData,
-              updatedAt: Timestamp.now(),
-              _syncedFromOffline: true
-            }, { merge: true });
-          } else if (pending.type === 'create') {
-            const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-            await addDoc(entriesCollection, {
-              ...normalizedData,
-              createdAt: Timestamp.now(),
-              _syncedFromOffline: true
-            });
-          }
-          
-          OfflineStorage.markAsSynced(pending.id);
-          synced++;
-          
-        } catch (error) {
-          console.error('Error sincronizando:', error);
-          OfflineStorage.markAsFailed(pending.id);
-          failed++;
-        }
-      }
-
-      const newPending = OfflineStorage.getPendingEntries(user.uid);
-      setPendingCount(newPending.length);
-
-      if (synced > 0) {
+      if (entry?.id) {
+        entryId = entry.id;
+        const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entryId);
+        await setDoc(entryRef, { ...entryData, createdAt: entry.createdAt || serverTimestamp() }, { merge: true });
         toast({
-          title: "✅ Sincronizado",
-          description: `${synced} cambios sincronizados exitosamente`,
-          duration: 4000,
+          title: '✅ Entrada Actualizada',
+          description: 'Tu reflexión ha sido guardada con éxito.',
         });
-        
-        setTimeout(() => {
-          router.refresh();
-        }, 1000);
-      }
-
-      if (failed > 0) {
+      } else {
+        const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
+        entryData.createdAt = serverTimestamp();
+        const newDocRef = await addDoc(entriesCollection, entryData);
+        entryId = newDocRef.id;
         toast({
-          variant: "destructive",
-          title: "⚠️ Algunos cambios fallaron",
-          description: `${failed} cambios no se pudieron sincronizar`,
-          duration: 5000,
+          title: '🎉 Nueva Entrada Creada',
+          description: 'Tu reflexión ha sido añadida a tu diario.',
         });
+      }
+      
+      onSave?.();
+      
+      // Solo redirige si no es un modal
+      if (!isModal) {
+        router.push(`/entry/${entryId}`);
+      } else {
+        router.refresh(); // Refresca los datos en la página actual
       }
 
     } catch (error) {
-      console.error('Error general sincronizando:', error);
+      console.error('Error guardando entrada:', error);
       toast({
-        variant: "destructive",
-        title: "❌ Error de sincronización",
-        description: "No se pudo completar la sincronización",
+        variant: 'destructive',
+        title: '❌ Error al Guardar',
+        description: 'Hubo un problema al guardar tu entrada. Por favor, intenta de nuevo.',
       });
-    } finally {
-      setIsSaving(false);
-    }
-  }, [user, firestore, pendingCount, toast, router]);
-
-  // Guardado principal
-  const handleSave = async (data: JournalFormValues): Promise<{success: boolean; offline: boolean}> => {
-    if (!user || !firestore) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Usuario no autenticado",
-      });
-      return { success: false, offline: false };
-    }
-
-    setIsSaving(true);
-
-    try {
-      const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
-      const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
-      
-      const entryData = {
-        bibleBook: data.bibleBook,
-        chapter: data.chapter,
-        bibleVerse: fullBibleVerse,
-        verseText: data.verseText,
-        tagIds: tags,
-        observation: normalizeEditorContent(data.observation),
-        teaching: normalizeEditorContent(data.teaching),
-        practicalApplication: normalizeEditorContent(data.practicalApplication),
-        userId: user.uid,
-        updatedAt: Timestamp.now()
-      };
-
-      const isConnected = await OfflineStorage.checkRealConnection();
-      
-      if (!isConnected) {
-        const offlineId = OfflineStorage.saveEntryEnhanced({
-          id: entry?.id || '',
-          type: isEditing ? 'update' : 'create',
-          data: entryData,
-          userId: user.uid
-        });
-        
-        OfflineStorage.forceSave(`emergency_${Date.now()}`, entryData);
-        
-        const newPending = OfflineStorage.getPendingEntries(user.uid);
-        setPendingCount(newPending.length);
-        setHasUnsavedChanges(false);
-        
-        toast({
-          title: "📱 Guardado offline exitoso",
-          description: "Los cambios se guardaron en tu dispositivo.",
-          duration: 5000,
-        });
-        
-        setTimeout(() => {
-          toast({
-            title: "¿Qué deseas hacer?",
-            description: "Tus cambios están guardados localmente",
-            duration: 8000,
-            action: (
-              <div className="flex flex-col gap-2 mt-2">
-                <Button 
-                  size="sm" 
-                  variant="default"
-                  onClick={() => {
-                    form.reset();
-                    setHasUnsavedChanges(false);
-                  }}
-                >
-                  Crear otra entrada
-                </Button>
-                <Button 
-                  size="sm"
-                  variant="outline"
-                  onClick={() => router.push('/journal')}
-                >
-                  Ver todas las entradas
-                </Button>
-              </div>
-            ),
-          });
-        }, 1000);
-        
-        setIsSaving(false);
-        return { success: true, offline: true };
-      }
-
-      try {
-        if (isEditing && entry?.id) {
-          const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-          await setDoc(entryRef, entryData, { merge: true });
-        } else {
-          const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-          await addDoc(entriesCollection, { 
-            ...entryData, 
-            createdAt: Timestamp.now() 
-          });
-        }
-        
-        toast({
-          title: "✅ ¡Guardado!",
-          description: "Tu entrada se ha guardado exitosamente.",
-          duration: 4000,
-        });
-        
-        setTimeout(() => {
-          if (onSave) onSave();
-          if (!isModal) {
-            router.push('/journal');
-          }
-        }, 1500);
-        
-        setIsSaving(false);
-        return { success: true, offline: false };
-        
-      } catch (firebaseError) {
-        console.error('Error Firebase:', firebaseError);
-        
-        const offlineId = OfflineStorage.saveEntryEnhanced({
-          id: entry?.id || '',
-          type: isEditing ? 'update' : 'create',
-          data: entryData,
-          userId: user.uid
-        });
-        
-        setPendingCount(prev => prev + 1);
-        
-        toast({
-          title: "⚠️ Guardado local",
-          description: "Se guardó localmente por error de conexión.",
-          duration: 5000,
-        });
-        
-        setIsSaving(false);
-        return { success: true, offline: true };
-      }
-
-    } catch (error: any) {
-      console.error("❌ Error crítico en handleSave:", error);
-      
-      try {
-        localStorage.setItem(`last_resort_${Date.now()}`, JSON.stringify({
-          formData: data,
-          timestamp: Date.now(),
-          userId: user?.uid
-        }));
-        
-        toast({
-          title: "🆘 Guardado de emergencia",
-          description: "Los cambios se guardaron como precaución.",
-          duration: 6000,
-        });
-        
-        setIsSaving(false);
-        return { success: true, offline: true };
-        
-      } catch (emergencyError) {
-        toast({
-          variant: "destructive",
-          title: "❌ Error crítico",
-          description: "No se pudo guardar. Copia tu contenido.",
-          duration: 7000,
-        });
-        
-        setIsSaving(false);
-        return { success: false, offline: false };
-      }
     }
   };
-
-  const onSubmit = async (data: JournalFormValues) => {
-    await handleSave(data);
-  };
-
-  const StatusIndicator = () => {
-    if (isSaving) {
-      return (
-        <span className="text-xs text-blue-600 flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin"/>
-          {isOnline ? 'Guardando...' : 'Guardando offline...'}
-        </span>
-      );
-    }
-    
-    if (!isOnline) {
-      return (
-        <span className="text-xs text-amber-600 flex items-center gap-1">
-          <WifiOff className="h-3 w-3"/>
-          Offline
-        </span>
-      );
-    }
-    
-    return (
-      <span className="text-xs text-green-600 flex items-center gap-1">
-        <CheckCircle2 className="h-3 w-3"/>
-        En línea
-      </span>
-    );
-  };
-
-  // Mostrar loading mientras se cargan datos
-  if (isLoading && isEditing) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Cargando entrada...</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
-            <div className="h-4 bg-muted rounded w-1/2 animate-pulse"></div>
-            <div className="h-32 bg-muted rounded animate-pulse"></div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   const formContent = (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        
-        {/* Barra de estado */}
-        <div className="flex flex-wrap justify-between items-center bg-muted/30 p-3 rounded-md mb-4 gap-2">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">
-              {isEditing ? 'Editar Entrada' : 'Nueva Entrada'}
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <StatusIndicator />
-            
-            {pendingCount > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-amber-600">
-                  {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
-                </span>
-                {isOnline && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={syncPending}
-                    disabled={isSaving}
-                    className="text-xs h-7"
-                  >
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Sincronizar
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Campos del formulario */}
-        <div className="grid grid-cols-1 sm:grid-cols-6 sm:gap-4 space-y-6 sm:space-y-0">
+        {/* Referencia Bíblica */}
+        <fieldset className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FormField
             control={form.control}
             name="bibleBook"
             render={({ field }) => (
-              <FormItem className="sm:col-span-3">
+              <FormItem>
                 <FormLabel>Libro *</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
-                  value={field.value || ""}
-                  defaultValue={field.value || ""}
-                >
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Selecciona un libro">
-                        {field.value || "Selecciona un libro"}
-                      </SelectValue>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un libro" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {BIBLE_BOOKS.map(book => (
-                      <SelectItem key={book} value={book}>{book}</SelectItem>
-                    ))}
+                    <ScrollArea className="h-72">
+                      {BIBLE_BOOKS.map(book => (
+                        <SelectItem key={book} value={book}>
+                          {book}
+                        </SelectItem>
+                      ))}
+                    </ScrollArea>
                   </SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="chapter"
             render={({ field }) => (
-              <FormItem className="sm:col-span-1">
+              <FormItem>
                 <FormLabel>Capítulo *</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
-                    placeholder="Ej: 23" 
-                    value={field.value || ""}
-                    onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-                  />
+                  <Input type="number" min="1" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          
           <FormField
             control={form.control}
             name="bibleVerse"
             render={({ field }) => (
-              <FormItem className="sm:col-span-2">
-                <FormLabel>Versículos *</FormLabel>
+              <FormItem>
+                <FormLabel>Versículo(s) *</FormLabel>
                 <FormControl>
-                  <Input placeholder="Ej: 1-4" {...field} value={field.value || ""} />
+                  <Input placeholder="Ej: 16 o 16-18" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
+        </fieldset>
 
         <FormField
           control={form.control}
           name="verseText"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Texto del Versículo *</FormLabel>
+              <FormLabel>Escritura (S - Scripture) *</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Escribe el texto del versículo..."
-                  className="min-h-[100px] font-serif"
+                  placeholder="Escribe o pega el texto del versículo aquí..."
+                  rows={4}
                   {...field}
-                  value={field.value || ""}
                 />
               </FormControl>
               <FormMessage />
@@ -669,142 +233,94 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           name="observation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Observación (O - Observation) *</FormLabel>
+              <FormLabel>Observación (O - Observation)</FormLabel>
               <FormControl>
-                <div className="min-h-[150px]">
-                  <RichTextEditor
-                    value={field.value || '<p></p>'}
-                    onChange={field.onChange}
-                    placeholder="¿Qué dice el texto?..."
-                  />
-                </div>
+                <RichTextEditor
+                  placeholder="¿Qué dice el texto? ¿Cuál es el contexto, los hechos, las personas involucradas?"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="teaching"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Enseñanza *</FormLabel>
+              <FormLabel>Enseñanza</FormLabel>
               <FormControl>
-                <div className="min-h-[150px]">
-                  <RichTextEditor
-                    value={field.value || '<p></p>'}
-                    onChange={field.onChange}
-                    placeholder="¿Qué verdad espiritual...?"
-                  />
-                </div>
+                <RichTextEditor
+                  placeholder="¿Qué te enseña Dios a través de este pasaje sobre su carácter o sus promesas?"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="practicalApplication"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Aplicación Práctica *</FormLabel>
+              <FormLabel>Aplicación Práctica</FormLabel>
               <FormControl>
-                <div className="min-h-[150px]">
-                  <RichTextEditor
-                    value={field.value || '<p></p>'}
-                    onChange={field.onChange}
-                    placeholder="¿Cómo puedo poner por obra...?"
-                  />
-                </div>
+                <RichTextEditor
+                  placeholder="¿Cómo aplicarás esta verdad a tu vida? ¿Qué cambios prácticos harás?"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="tagIds"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Etiquetas</FormLabel>
+              <FormLabel>Etiquetas (separadas por comas)</FormLabel>
               <FormControl>
-                <Input placeholder="Oración, Familia, Fe" {...field} value={field.value || ""} />
+                <Input placeholder="fe, oración, familia" {...field} />
               </FormControl>
-              <FormDescription>Separa con comas</FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <div className="flex flex-col sm:flex-row justify-end gap-3 items-center pt-6 border-t">
-          <div className="text-sm text-muted-foreground mr-0 sm:mr-4">
-            {isOnline ? '✅ Conectado' : '📱 Modo offline'}
-            {pendingCount > 0 && ` • ${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''}`}
-          </div>
-
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => {
-                if (hasUnsavedChanges) {
-                  if (confirm('¿Salir sin guardar los cambios?')) {
-                    router.push('/journal');
-                  }
-                } else {
-                  router.push('/journal');
-                }
-              }}
-              className="flex-1 sm:flex-none"
-              disabled={isSaving}
-            >
-              {isModal ? 'Cancelar' : 'Volver'}
+        <CardFooter className="px-0 pt-6 flex-col sm:flex-row gap-2">
+            <Button type="submit" disabled={form.formState.isSubmitting} className="w-full sm:w-auto">
+              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {form.formState.isSubmitting ? 'Guardando...' : entry ? 'Guardar Cambios' : 'Crear Entrada'}
             </Button>
-            <Button 
-              type="submit" 
-              disabled={isSaving}
-              className="flex-1 sm:flex-none"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isOnline ? 'Guardando...' : 'Guardando local...'}
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
-                </>
-              )}
+            <Button type="button" variant="outline" onClick={() => isModal ? onSave?.() : router.back()} className="w-full sm:w-auto mt-2 sm:mt-0">
+              Cancelar
             </Button>
-          </div>
-        </div>
+        </CardFooter>
       </form>
     </Form>
   );
 
-  if (isModal) {
-    return <div className="max-h-[80vh] overflow-y-auto p-1 pr-4">{formContent}</div>;
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <BookOpen className="h-6 w-6" />
-          {isEditing ? 'Editar Entrada' : 'Nueva Entrada'}
-        </CardTitle>
-        <CardDescription>
-          Utiliza el método S.O.A.P para tu estudio bíblico.
-          {!isOnline && " (Trabajando en modo offline)"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {formContent}
-      </CardContent>
-    </Card>
+    <div className="p-2 sm:p-4">
+      <Card className="border-none shadow-none">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold font-headline">
+            {entry ? 'Editar Reflexión' : 'Nueva Reflexión'}
+          </CardTitle>
+          <CardDescription>
+            Utiliza el método S.O.A.P para tu estudio bíblico.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {formContent}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

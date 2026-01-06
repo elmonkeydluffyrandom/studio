@@ -1,249 +1,319 @@
-// src/lib/offlineStorage.ts - VERSIÓN COMPLETA CORREGIDA
-export interface OfflineEntry {
-  id: string;
-  type: 'create' | 'update';
-  data: any;
-  timestamp: number;
-  userId: string;
-  status: 'pending' | 'synced' | 'failed';
+// lib/offlineStorage.ts
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { db } from '@/firebase/config'
+
+export interface PendingOperation {
+  id: string
+  type: 'create' | 'update' | 'delete'
+  data: any
+  timestamp: number
+  userId: string
+  retries: number
 }
 
-class OfflineStorage {
-  private static readonly STORAGE_KEY = 'journal_offline_v2';
-  
-  // Obtener todas las entradas
-  static getAllEntries(): Record<string, OfflineEntry> {
-    try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      return data ? JSON.parse(data) : {};
-    } catch (error) {
-      console.error('Error leyendo almacenamiento offline:', error);
-      return {};
-    }
-  }
-  
-  // Guardar entrada offline
-  static saveEntry(entry: Omit<OfflineEntry, 'timestamp' | 'status'>): string {
-    try {
-      const entries = this.getAllEntries();
-      const entryId = entry.id || `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const offlineEntry: OfflineEntry = {
-        ...entry,
-        id: entryId,
-        timestamp: Date.now(),
-        status: 'pending'
-      };
-      
-      entries[entryId] = offlineEntry;
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(entries));
-      
-      console.log('✅ Guardado offline:', { id: entryId, type: entry.type });
-      return entryId;
-    } catch (error) {
-      console.error('❌ Error guardando offline:', error);
-      throw error;
-    }
-  }
-  
-  // Obtener entradas pendientes de un usuario
-  static getPendingEntries(userId: string): OfflineEntry[] {
-    const entries = this.getAllEntries();
-    return Object.values(entries).filter(
-      entry => entry.userId === userId && entry.status === 'pending'
-    );
-  }
-  
-  // Marcar como sincronizado
-  static markAsSynced(entryId: string): void {
-    const entries = this.getAllEntries();
-    if (entries[entryId]) {
-      entries[entryId].status = 'synced';
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(entries));
-    }
-  }
-  
-  // Marcar como fallido
-  static markAsFailed(entryId: string): void {
-    const entries = this.getAllEntries();
-    if (entries[entryId]) {
-      entries[entryId].status = 'failed';
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(entries));
-    }
-  }
-  
-  // Eliminar entrada
-  static removeEntry(entryId: string): void {
-    const entries = this.getAllEntries();
-    delete entries[entryId];
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(entries));
-  }
-  
-  // Verificar si hay cambios pendientes
-  static hasPendingChanges(userId: string): boolean {
-    return this.getPendingEntries(userId).length > 0;
-  }
-  
-  // Limpiar sincronizados antiguos (más de 7 días)
-  static cleanupOldEntries(): void {
-    const entries = this.getAllEntries();
-    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+const QUEUE_KEY = 'bibliadiario_offline_queue'
+const MAX_RETRIES = 3
+
+/**
+ * Agregar operación a la cola offline
+ */
+export function queueOperation(operation: Omit<PendingOperation, 'retries'>): void {
+  try {
+    const queue = getQueue()
     
-    Object.keys(entries).forEach(key => {
-      if (entries[key].status === 'synced' && entries[key].timestamp < oneWeekAgo) {
-        delete entries[key];
+    // Evitar duplicados - si ya existe una operación para este ID, reemplazarla
+    const existingIndex = queue.findIndex(
+      op => op.id === operation.id && op.userId === operation.userId
+    )
+    
+    if (existingIndex !== -1) {
+      queue[existingIndex] = { ...operation, retries: 0 }
+      console.log('🔄 Operación actualizada en cola:', operation.id)
+    } else {
+      queue.push({ ...operation, retries: 0 })
+      console.log('➕ Nueva operación agregada a cola:', operation.id)
+    }
+    
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+    console.log(`✅ Cola guardada. Total: ${queue.length} operaciones`)
+  } catch (error) {
+    console.error('❌ Error guardando en cola offline:', error)
+  }
+}
+
+/**
+ * Obtener todas las operaciones pendientes
+ */
+export function getQueue(): PendingOperation[] {
+  try {
+    const data = localStorage.getItem(QUEUE_KEY)
+    if (!data) return []
+    
+    const queue = JSON.parse(data) as PendingOperation[]
+    console.log(`📋 Cola cargada: ${queue.length} operaciones`)
+    return queue
+  } catch (error) {
+    console.error('❌ Error leyendo cola offline:', error)
+    return []
+  }
+}
+
+/**
+ * Obtener operaciones de un usuario específico
+ */
+export function getUserQueue(userId: string): PendingOperation[] {
+  const queue = getQueue()
+  return queue.filter(op => op.userId === userId)
+}
+
+/**
+ * Limpiar toda la cola
+ */
+export function clearQueue(): void {
+  try {
+    localStorage.removeItem(QUEUE_KEY)
+    console.log('🗑️ Cola limpiada completamente')
+  } catch (error) {
+    console.error('❌ Error limpiando cola:', error)
+  }
+}
+
+/**
+ * Remover una operación específica de la cola
+ */
+export function removeFromQueue(operationId: string, userId: string): void {
+  try {
+    const queue = getQueue()
+    const newQueue = queue.filter(
+      op => !(op.id === operationId && op.userId === userId)
+    )
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(newQueue))
+    console.log(`✅ Operación ${operationId} removida de la cola`)
+  } catch (error) {
+    console.error('❌ Error removiendo de cola:', error)
+  }
+}
+
+/**
+ * Sincronizar cola cuando vuelva la conexión
+ */
+export async function syncQueue(userId: string): Promise<{
+  success: number
+  failed: number
+  errors: string[]
+}> {
+  const queue = getQueue()
+  const userQueue = queue.filter(op => op.userId === userId)
+  
+  if (userQueue.length === 0) {
+    console.log('ℹ️ No hay operaciones pendientes para sincronizar')
+    return { success: 0, failed: 0, errors: [] }
+  }
+
+  console.log(`🔄 Iniciando sincronización de ${userQueue.length} operaciones...`)
+
+  let success = 0
+  let failed = 0
+  const errors: string[] = []
+  const remainingQueue: PendingOperation[] = []
+
+  for (const operation of userQueue) {
+    try {
+      console.log(`⏳ Sincronizando: ${operation.type} - ${operation.id}`)
+      
+      const entryRef = doc(db, 'users', userId, 'journalEntries', operation.id)
+
+      switch (operation.type) {
+        case 'create':
+        case 'update':
+          await setDoc(
+            entryRef,
+            {
+              ...operation.data,
+              updatedAt: serverTimestamp(),
+              syncedAt: serverTimestamp(),
+            },
+            { merge: true }
+          )
+          success++
+          console.log(`✅ Sincronizado exitosamente: ${operation.id}`)
+          
+          // Remover de la cola
+          removeFromQueue(operation.id, userId)
+          break
+
+        case 'delete':
+          // Implementar si es necesario
+          console.log('⚠️ Delete aún no implementado')
+          break
       }
-    });
-    
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(entries));
-  }
-  
-  // Forzar guardado simple (último recurso)
-  static forceSave(key: string, data: any): void {
-    try {
-      localStorage.setItem(`force_${key}`, JSON.stringify({
-        data,
-        timestamp: Date.now()
-      }));
-      console.log('🆘 Guardado forzado:', key);
-    } catch (error) {
-      console.error('Error en guardado forzado:', error);
-    }
-  }
-  
-  // 🔥 VERIFICAR CONEXIÓN MEJORADO - NO SIEMPRE OFFLINE
-  static async checkRealConnection(): Promise<boolean> {
-    if (typeof navigator === 'undefined') return true;
-    
-    // 1. Primero el estado básico del navegador
-    if (!navigator.onLine) {
-      console.log('📴 Navegador reporta offline');
-      return false;
-    }
-    
-    console.log('🌐 Navegador reporta online, verificando conexión real...');
-    
-    // 2. Lista de endpoints para probar (alguno debería responder)
-    const endpoints = [
-      'https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js',
-      'https://fonts.gstatic.com',
-      'https://unpkg.com',
-      window.location.origin // Tu propia app
-    ];
-    
-    // 3. Intentar cada endpoint
-    for (const endpoint of endpoints) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        
-        console.log(`🔄 Probando conexión con: ${endpoint}`);
-        
-        const response = await fetch(endpoint, {
-          method: 'HEAD',
-          mode: 'no-cors', // Importante: no-cors para evitar CORS
-          cache: 'no-cache',
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        // Si llegamos aquí, HAY CONEXIÓN
-        console.log(`✅ Conexión confirmada con: ${endpoint}`);
-        return true;
-        
-      } catch (error) {
-        // 🔥 CORRECCIÓN: Manejar error como unknown
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`⚠️ No se pudo conectar a ${endpoint}:`, errorMessage);
-        // Continuar con el siguiente endpoint
-        continue;
+    } catch (error: any) {
+      console.error(`❌ Error sincronizando ${operation.id}:`, error)
+      
+      // Si no ha alcanzado el máximo de reintentos, mantener en cola
+      if (operation.retries < MAX_RETRIES) {
+        remainingQueue.push({
+          ...operation,
+          retries: operation.retries + 1
+        })
+        console.log(`🔄 Reintento ${operation.retries + 1}/${MAX_RETRIES} para ${operation.id}`)
+      } else {
+        failed++
+        errors.push(`${operation.id}: ${error.message}`)
+        console.log(`❌ Max reintentos alcanzado para ${operation.id}`)
       }
-    }
-    
-    // 4. Último intento: ping simple
-    try {
-      console.log('🔄 Último intento: ping simple...');
-      return await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          console.log('✅ Ping exitoso');
-          resolve(true);
-        };
-        img.onerror = () => {
-          console.log('❌ Ping falló');
-          resolve(false);
-        };
-        img.src = 'https://www.google.com/images/phd/px.gif?t=' + Date.now();
-      });
-    } catch (error) {
-      console.log('❌ Todos los métodos fallaron, asumiendo offline');
-      return false;
     }
   }
 
-  // Serializar datos específicamente para campos HTML
-  static serializeEntryData(data: any): any {
-    try {
-      const serialized = { ...data };
+  // Actualizar cola con operaciones que fallaron
+  const otherUsersQueue = queue.filter(op => op.userId !== userId)
+  const newQueue = [...otherUsersQueue, ...remainingQueue]
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(newQueue))
+
+  console.log(`📊 Sincronización completada: ${success} exitosas, ${failed} fallidas, ${remainingQueue.length} pendientes`)
+
+  return { success, failed, errors }
+}
+
+/**
+ * Verificar si hay operaciones pendientes
+ */
+export function hasPendingOperations(userId: string): boolean {
+  const queue = getUserQueue(userId)
+  return queue.length > 0
+}
+
+/**
+ * Obtener número de operaciones pendientes
+ */
+export function getPendingCount(userId: string): number {
+  const queue = getUserQueue(userId)
+  return queue.length
+}
+
+/**
+ * Hook React para sincronización automática
+ */
+import { useEffect } from 'react'
+import { toast } from 'sonner'
+
+export function useOfflineSync(userId: string | null) {
+  useEffect(() => {
+    if (!userId) return
+
+    const handleOnline = async () => {
+      console.log('🌐 Conexión restaurada, verificando cola...')
       
-      const htmlFields = ['observation', 'teaching', 'practicalApplication'];
-      htmlFields.forEach(field => {
-        if (serialized[field]) {
-          if (typeof serialized[field] === 'string') {
-            let html = serialized[field].trim();
-            
-            if (!html.includes('<') && html.length > 0) {
-              html = `<p>${html.replace(/\n/g, '<br>')}</p>`;
-            }
-            
-            if (!html.startsWith('<')) {
-              html = `<p>${html}</p>`;
-            }
-            
-            serialized[field] = html;
+      const pendingCount = getPendingCount(userId)
+      if (pendingCount === 0) {
+        console.log('✅ No hay operaciones pendientes')
+        return
+      }
+
+      toast.loading(`Sincronizando ${pendingCount} cambio(s)...`, { 
+        id: 'sync-queue' 
+      })
+      
+      const result = await syncQueue(userId)
+      
+      if (result.success > 0) {
+        toast.success(
+          `✅ ${result.success} entrada(s) sincronizada(s)`,
+          { id: 'sync-queue', duration: 4000 }
+        )
+      }
+      
+      if (result.failed > 0) {
+        toast.error(
+          `❌ ${result.failed} entrada(s) no se pudieron sincronizar`,
+          { 
+            id: 'sync-queue',
+            duration: 5000,
+            description: 'Intenta sincronizar manualmente desde el dashboard'
           }
-        } else {
-          serialized[field] = '<p></p>';
-        }
-      });
-      
-      return serialized;
-    } catch (error) {
-      console.error('Error serializando datos:', error);
-      return data;
+        )
+      }
     }
-  }
-  
-  // Guardar entrada con serialización mejorada
-  static saveEntryEnhanced(entry: Omit<OfflineEntry, 'timestamp' | 'status'>): string {
-    try {
-      const entries = this.getAllEntries();
-      const entryId = entry.id || `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const serializedData = this.serializeEntryData(entry.data);
-      
-      const offlineEntry: OfflineEntry = {
-        ...entry,
-        id: entryId,
-        data: serializedData,
-        timestamp: Date.now(),
-        status: 'pending'
-      };
-      
-      entries[entryId] = offlineEntry;
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(entries));
-      
-      console.log('✅ Guardado offline mejorado:', { 
-        id: entryId, 
-        type: entry.type
-      });
-      return entryId;
-    } catch (error) {
-      console.error('❌ Error guardando offline mejorado:', error);
-      throw error;
+
+    const handleOffline = () => {
+      console.log('📡 Conexión perdida, modo offline activado')
+      toast.info('Sin conexión. Los cambios se guardarán localmente.', {
+        duration: 3000
+      })
     }
-  }
+
+    // Listeners
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    
+    // Intentar sincronizar al cargar si hay conexión
+    if (navigator.onLine) {
+      const pendingCount = getPendingCount(userId)
+      if (pendingCount > 0) {
+        console.log(`🔄 ${pendingCount} operaciones pendientes detectadas al cargar`)
+        handleOnline()
+      }
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [userId])
 }
 
-export default OfflineStorage;
+/**
+ * Componente para mostrar estado de sincronización
+ */
+export function SyncStatus({ userId }: { userId: string | null }) {
+  const [pendingCount, setPendingCount] = useState(0)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+
+  useEffect(() => {
+    if (!userId) return
+
+    // Actualizar contador cada segundo
+    const interval = setInterval(() => {
+      const count = getPendingCount(userId)
+      setPendingCount(count)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [userId])
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  if (pendingCount === 0 && isOnline) return null
+
+  return (
+    <div className={`fixed bottom-4 right-4 px-4 py-2 rounded-full shadow-lg border flex items-center gap-2 ${
+      isOnline ? 'bg-white' : 'bg-yellow-50 border-yellow-200'
+    }`}>
+      <div className={`w-2 h-2 rounded-full ${
+        isOnline 
+          ? pendingCount > 0 
+            ? 'bg-yellow-500 animate-pulse' 
+            : 'bg-green-500'
+          : 'bg-gray-400'
+      }`} />
+      <span className="text-sm font-medium">
+        {isOnline 
+          ? pendingCount > 0 
+            ? `Sincronizando ${pendingCount}...`
+            : 'Sincronizado'
+          : 'Sin conexión'}
+      </span>
+    </div>
+  )
+}
