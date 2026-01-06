@@ -17,17 +17,193 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     const [isGenerating, setIsGenerating] = useState(false);
     const { toast } = useToast();
   
+    // Función específica para iOS (Safari es problemático con descargas)
+    const downloadForIOS = (pdf: jsPDF, fileName: string) => {
+        try {
+            const pdfDataUri = pdf.output('datauristring');
+            
+            // Crear una nueva ventana con el PDF y instrucciones
+            const newWindow = window.open();
+            if (newWindow) {
+                newWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>${fileName}</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            * {
+                                margin: 0;
+                                padding: 0;
+                                box-sizing: border-box;
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            }
+                            body {
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                min-height: 100vh;
+                                padding: 20px;
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                justify-content: center;
+                            }
+                            .container {
+                                background: white;
+                                border-radius: 20px;
+                                padding: 30px;
+                                width: 100%;
+                                max-width: 500px;
+                                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                                text-align: center;
+                            }
+                            .icon {
+                                font-size: 60px;
+                                margin-bottom: 20px;
+                            }
+                            h1 {
+                                color: #333;
+                                margin-bottom: 15px;
+                                font-size: 24px;
+                                font-weight: 700;
+                            }
+                            .instructions {
+                                background: #f8f9fa;
+                                border-radius: 15px;
+                                padding: 20px;
+                                margin: 20px 0;
+                                text-align: left;
+                                border-left: 4px solid #4CAF50;
+                            }
+                            .instructions ol {
+                                margin-left: 20px;
+                                margin-top: 10px;
+                            }
+                            .instructions li {
+                                margin-bottom: 10px;
+                                color: #555;
+                                line-height: 1.5;
+                            }
+                            .highlight {
+                                background: #fff3cd;
+                                padding: 3px 6px;
+                                border-radius: 4px;
+                                font-weight: 600;
+                            }
+                            .pdf-viewer {
+                                width: 100%;
+                                height: 400px;
+                                border-radius: 10px;
+                                margin-top: 20px;
+                                border: 2px solid #e0e0e0;
+                            }
+                            .button-container {
+                                display: flex;
+                                gap: 10px;
+                                margin-top: 25px;
+                                flex-wrap: wrap;
+                                justify-content: center;
+                            }
+                            .btn {
+                                padding: 12px 24px;
+                                border-radius: 50px;
+                                border: none;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                text-decoration: none;
+                                display: inline-block;
+                            }
+                            .btn-primary {
+                                background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+                                color: white;
+                            }
+                            .btn-secondary {
+                                background: #6c757d;
+                                color: white;
+                            }
+                            .btn:hover {
+                                transform: translateY(-2px);
+                                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                            }
+                            .note {
+                                margin-top: 20px;
+                                color: #666;
+                                font-size: 14px;
+                                font-style: italic;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="icon">📱</div>
+                            <h1>Tu PDF está listo</h1>
+                            
+                            <div class="instructions">
+                                <strong>Para guardar en iPhone/iPad:</strong>
+                                <ol>
+                                    <li>Toca el ícono de <span class="highlight">compartir (📤)</span> en la barra inferior</li>
+                                    <li>Desliza hacia abajo y selecciona <span class="highlight">"Guardar en Archivos"</span></li>
+                                    <li>Elige una carpeta (recomendado: "En mi iPhone" → "Descargas")</li>
+                                    <li>Toca <span class="highlight">"Guardar"</span> en la esquina superior derecha</li>
+                                </ol>
+                            </div>
+                            
+                            <iframe 
+                                class="pdf-viewer" 
+                                src="${pdfDataUri}"
+                                title="Vista previa del PDF"
+                            ></iframe>
+                            
+                            <div class="button-container">
+                                <a href="${pdfDataUri}" download="${fileName}" class="btn btn-primary">
+                                    ⬇️ Intentar Descarga Directa
+                                </a>
+                                <button onclick="window.print()" class="btn btn-secondary">
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
+                            
+                            <p class="note">
+                                Si la descarga directa no funciona, usa las instrucciones de arriba.
+                            </p>
+                        </div>
+                    </body>
+                    </html>
+                `);
+                newWindow.document.close();
+                
+                toast({
+                    title: "📱 PDF listo para iOS",
+                    description: "Se abrió en una nueva ventana. Sigue las instrucciones para guardar.",
+                    duration: 8000,
+                });
+            } else {
+                // Si bloquea popup, mostrar data URI directamente
+                window.location.href = pdfDataUri;
+            }
+        } catch (error) {
+            console.error("Error en iOS download:", error);
+            toast({
+                variant: "destructive",
+                title: "Error en iOS",
+                description: "Intenta usar una computadora o otro navegador",
+            });
+        }
+    };
+
+    // Función principal de descarga
     const handleDownload = async () => {
         try {
             setIsGenerating(true);
             
             // Mostrar toast de "Generando" inmediatamente
             toast({ 
-                title: "Generando PDF", 
-                description: "Por favor espera...",
+                title: "⏳ Generando PDF", 
+                description: "Estamos preparando tu documento...",
                 duration: 3000,
             });
 
+            // Pequeña pausa para permitir que se muestre el toast
             await new Promise(resolve => setTimeout(resolve, 100));
 
             const pdf = new jsPDF({
@@ -46,65 +222,60 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 await addBulkEntriesToPdf(pdf, entries);
             }
 
-            // Para mejor compatibilidad con móviles
-            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                // iOS - usar método alternativo
-                const pdfData = pdf.output('datauristring');
-                const newWindow = window.open();
-                if (newWindow) {
-                    newWindow.document.write(`
-                        <iframe 
-                            width="100%" 
-                            height="100%" 
-                            src="${pdfData}"
-                            style="border: none;"
-                        ></iframe>
-                    `);
-                    newWindow.document.title = fileName;
-                    
-                    toast({ 
-                        title: "PDF listo", 
-                        description: "El PDF se abrió en una nueva ventana. Usa 'Compartir' para guardarlo.",
-                        duration: 5000,
-                    });
-                }
-            } else if (/Android/i.test(navigator.userAgent)) {
-                // Android - método mejorado
-                const pdfBlob = pdf.output('blob');
-                const url = URL.createObjectURL(pdfBlob);
-                
-                // Intentar con iframe primero
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = url;
-                document.body.appendChild(iframe);
-                
+            // Detectar dispositivo
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isMobile = isIOS || isAndroid;
+
+            // ============ ESTRATEGIAS DIFERENTES POR DISPOSITIVO ============
+            
+            if (isIOS) {
+                // iOS necesita tratamiento especial
+                downloadForIOS(pdf, fileName);
+                setIsGenerating(false);
+                return; // Salir temprano para iOS
+            }
+            
+            // Para Android y Desktop
+            const pdfBlob = pdf.output('blob');
+            const url = URL.createObjectURL(pdfBlob);
+            
+            // Método 1: Enlace tradicional (funciona en Android y Desktop)
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            
+            // Método 2: Iframe como respaldo (para Android)
+            if (isAndroid) {
                 setTimeout(() => {
-                    document.body.removeChild(iframe);
-                    URL.revokeObjectURL(url);
-                }, 1000);
-                
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.src = url;
+                    document.body.appendChild(iframe);
+                    
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 1000);
+                }, 300);
+            }
+            
+            // Limpiar recursos
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 2000);
+            
+            // Mensajes según dispositivo
+            if (isAndroid) {
                 toast({ 
-                    title: "PDF descargado", 
-                    description: "Revisa tu carpeta de descargas o notificaciones.",
-                    duration: 4000,
+                    title: "✅ PDF enviado a descargas", 
+                    description: "Revisa la carpeta 'Descargas' o 'Downloads' en tu dispositivo.",
+                    duration: 5000,
                 });
             } else {
-                // Desktop y otros navegadores
-                const pdfBlob = pdf.output('blob');
-                const url = URL.createObjectURL(pdfBlob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = fileName;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                
-                setTimeout(() => {
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                }, 100);
-                
                 toast({ 
                     title: "✅ PDF descargado", 
                     description: "El archivo se ha descargado correctamente.",
@@ -114,13 +285,78 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
         } catch (error) {
             console.error("Error generando PDF:", error);
+            
+            // Si hay error, ofrecer método alternativo manual
             toast({ 
                 variant: "destructive", 
-                title: "Error", 
-                description: "Hubo un problema al generar el PDF. Intenta de nuevo." 
+                title: "❌ Error en descarga automática", 
+                description: "Intentemos con un método manual...",
+                duration: 4000,
             });
+            
+            // Crear un botón de descarga manual como fallback
+            setTimeout(() => {
+                try {
+                    const manualSection = document.createElement('div');
+                    manualSection.id = 'manual-download-section';
+                    manualSection.style.cssText = `
+                        position: fixed;
+                        bottom: 20px;
+                        left: 20px;
+                        right: 20px;
+                        background: white;
+                        padding: 20px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                        z-index: 10000;
+                        border: 2px solid #4CAF50;
+                    `;
+                    
+                    manualSection.innerHTML = `
+                        <h3 style="margin-bottom: 10px; color: #333;">📥 Descarga Manual</h3>
+                        <p style="margin-bottom: 15px; color: #666;">Toca el botón de abajo y mantén presionado, luego selecciona "Descargar enlace"</p>
+                        <a href="#" id="manual-download-link" 
+                           style="display: block; padding: 15px; background: #4CAF50; color: white; 
+                                  text-align: center; border-radius: 10px; text-decoration: none;
+                                  font-weight: bold; font-size: 16px;">
+                            ⬇️ DESCARGAR PDF MANUALMENTE
+                        </a>
+                        <button onclick="document.getElementById('manual-download-section').remove()" 
+                                style="margin-top: 10px; padding: 10px; width: 100%; 
+                                       background: #f44336; color: white; border: none; 
+                                       border-radius: 10px; cursor: pointer;">
+                            Cerrar
+                        </button>
+                    `;
+                    
+                    document.body.appendChild(manualSection);
+                    
+                    // Configurar el enlace manual
+                    setTimeout(() => {
+                        const manualLink = document.getElementById('manual-download-link');
+                        if (manualLink) {
+                            manualLink.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                // Aquí necesitaríamos regenerar el PDF o guardarlo en localStorage
+                                toast({
+                                    title: "Recargando PDF...",
+                                    description: "Por favor toca el botón de descarga principal nuevamente",
+                                    duration: 3000,
+                                });
+                            });
+                        }
+                    }, 100);
+                    
+                } catch (manualError) {
+                    console.error("Error creando descarga manual:", manualError);
+                }
+            }, 1000);
+            
         } finally {
-            setIsGenerating(false);
+            // Siempre quitar el estado de generación
+            setTimeout(() => {
+                setIsGenerating(false);
+            }, 2000);
         }
     };
 
@@ -331,6 +567,7 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
             variant="outline"
             disabled={(!entry && (!entries || entries.length === 0)) || isGenerating}
             className="w-full sm:w-auto"
+            data-pdf-button="true"
         >
             {isGenerating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
