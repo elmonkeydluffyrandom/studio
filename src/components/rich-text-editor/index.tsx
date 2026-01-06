@@ -2,7 +2,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { MenuBar } from './menu-bar';
 
 interface RichTextEditorProps {
@@ -48,14 +48,18 @@ export function RichTextEditor({ value = '', onChange, placeholder }: RichTextEd
   }, []);
 
   useEffect(() => {
-    if (editor && editor.isEditable) {
-      const currentContent = editor.getHTML();
-      const newContent = value === '' ? '<p></p>' : value;
-      if (currentContent !== newContent) {
-        editor.commands.setContent(newContent, false);
-      }
-    }
-  }, [value, editor]);
+    if (!editor || !isMounted) return;
+
+    const isSame = editor.getHTML() === value;
+    if (isSame) return;
+    
+    // Use `setTimeout` to ensure this runs after the current render cycle,
+    // which can help with timing issues related to form resets.
+    setTimeout(() => {
+        editor.commands.setContent(value, false);
+    }, 0);
+
+  }, [value, editor, isMounted]);
 
   if (!isMounted || !editor) {
     return (

@@ -75,21 +75,19 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   useEffect(() => {
     if (entry) {
       console.log('Cargando datos en editor...', entry);
-      
-      const valuesToSet: Partial<JournalFormData> = {
+      form.reset({
         bibleBook: entry.bibleBook || '',
         chapter: entry.chapter || 1,
         bibleVerse: entry.bibleVerse || '',
         verseText: entry.verseText || '',
-        observation: entry.observation || entry.observacion || '',
-        teaching: entry.teaching || entry.ensenanza || '',
-        practicalApplication: entry.practicalApplication || entry.aplicacion || entry.practica || '',
+        observation: entry.observation || '',
+        teaching: entry.teaching || '',
+        practicalApplication: entry.practicalApplication || '',
         tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
-      };
-      
-      form.reset(valuesToSet);
+      });
     }
   }, [entry, form]);
+
 
   const onSubmit = async (data: JournalFormData) => {
     if (!user || !firestore) {
@@ -107,10 +105,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         userId: user.uid,
         tagIds: data.tagIds ? data.tagIds.split(',').map(tag => tag.trim()).filter(Boolean) : [],
         updatedAt: serverTimestamp(),
-        // Normaliza los campos para consistencia
-        observacion: data.observation,
-        ensenanza: data.teaching,
-        aplicacion: data.practicalApplication,
       };
 
       let entryId: string;
@@ -125,8 +119,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         });
       } else {
         const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-        entryData.createdAt = serverTimestamp();
-        const newDocRef = await addDoc(entriesCollection, entryData);
+        const newDocData = { ...entryData, createdAt: serverTimestamp() };
+        const newDocRef = await addDoc(entriesCollection, newDocData);
         entryId = newDocRef.id;
         toast({
           title: '🎉 Nueva Entrada Creada',
