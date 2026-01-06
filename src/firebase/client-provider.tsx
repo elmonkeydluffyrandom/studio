@@ -2,73 +2,62 @@
 
 import { useEffect, useState } from 'react';
 import { FirebaseProvider } from './provider'; 
-import { 
-  initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager, 
-  getFirestore,
-  enableIndexedDbPersistence,
-  CACHE_SIZE_UNLIMITED
-} from 'firebase/firestore';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 
-let globalFirebase: any = null;
+interface FirebaseServices {
+  firebaseApp: FirebaseApp;
+  firestore: any; // Mantener como 'any' para flexibilidad con versiones de Firestore
+  auth: Auth;
+  areServicesAvailable: boolean;
+  persistenceActive: boolean;
+}
 
-async function getFirebaseInstance() {
+let globalFirebase: FirebaseServices | null = null;
+
+async function getFirebaseInstance(): Promise<FirebaseServices> {
   if (globalFirebase) return globalFirebase;
 
   console.log("🚀 Inicializando Firebase...");
   
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  
+  const firestore = getFirestore(app);
+  let persistenceActive = false;
+
   try {
+    // 1. Configurar persistencia de autenticación
     await setPersistence(auth, browserLocalPersistence);
     console.log("✅ Persistencia de Auth configurada");
   } catch (authError) {
     console.error("❌ Error en persistencia de Auth:", authError);
   }
 
-  let firestore;
-  let persistenceActive = false;
-
   try {
-    console.log("🔄 Configurando Firestore offline...");
-    
-    firestore = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-        cacheSizeBytes: CACHE_SIZE_UNLIMITED
-      })
-    });
-    
+    // 2. Habilitar persistencia de Firestore
+    await enableIndexedDbPersistence(firestore);
     persistenceActive = true;
-    console.log("✅ Firestore offline configurado");
-    
-  } catch (e) {
-    console.error("❌ Error cache avanzado:", e);
-    
-    firestore = getFirestore(app);
-    
-    try {
-      await enableIndexedDbPersistence(firestore, { forceOwnership: true });
-      persistenceActive = true;
-      console.log("✅ Persistencia IndexedDB (fallback)");
-    } catch (persistenceError: any) {
-      if (persistenceError.code === 'failed-precondition') {
-        console.warn("⚠️  Múltiples pestañas abiertas");
-      } else if (persistenceError.code === 'unimplemented') {
-        console.warn("⚠️  Navegador no soporta persistencia");
-      }
+    console.log("✅ Persistencia de Firestore habilitada.");
+  } catch (persistenceError: any) {
+    if (persistenceError.code === 'failed-precondition') {
+      console.warn("⚠️ Persistencia de Firestore falló: múltiples pestañas abiertas. Los datos pueden no sincronizarse correctamente entre pestañas.");
+      persistenceActive = true; // La persistencia aún puede funcionar en esta pestaña.
+    } else if (persistenceError.code === 'unimplemented') {
+      console.warn("⚠️ El navegador actual no soporta la persistencia de Firestore. La aplicación no funcionará offline.");
+    } else {
+      console.error("❌ Error desconocido al habilitar la persistencia de Firestore:", persistenceError);
     }
   }
 
-  onAuthStateChanged(auth, async (user) => {
+  // 3. Monitorear cambios de autenticación
+  onAuthStateChanged(auth, (user) => {
     if (user) {
-      console.log("👤 Usuario:", user.email?.substring(0, 10) + "...", "UID:", user.uid.substring(0, 8) + "...");
-      console.log("💾 Persistencia:", persistenceActive);
+      console.log(`👤 Usuario autenticado: ${user.email || 'Anónimo'}`);
+      console.log(`💾 Estado de persistencia: ${persistenceActive ? 'Activa' : 'Inactiva'}`);
+    } else {
+      console.log("👤 No hay usuario autenticado.");
     }
   });
 
@@ -84,7 +73,7 @@ async function getFirebaseInstance() {
 }
 
 export function FirebaseClientProvider({ children }: { children: React.ReactNode }) {
-  const [firebase, setFirebase] = useState<any>(null);
+  const [firebase, setFirebase] = useState<FirebaseServices | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -93,7 +82,7 @@ export function FirebaseClientProvider({ children }: { children: React.ReactNode
         const instance = await getFirebaseInstance();
         setFirebase(instance);
       } catch (error) {
-        console.error("💥 Error Firebase:", error);
+        console.error("💥 Error fatal al inicializar Firebase:", error);
       } finally {
         setLoading(false);
       }
@@ -102,7 +91,7 @@ export function FirebaseClientProvider({ children }: { children: React.ReactNode
     init();
   }, []);
 
-  if (loading || !firebase) {
+  if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
@@ -112,6 +101,17 @@ export function FirebaseClientProvider({ children }: { children: React.ReactNode
         </p>
       </div>
     );
+  }
+  
+  if (!firebase?.areServicesAvailable) {
+     return (
+       <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 dark:bg-red-900/50 p-4">
+        <p className="text-red-700 dark:text-red-300 text-center font-bold">Error Crítico</p>
+        <p className="text-sm text-red-600 dark:text-red-400 mt-2 text-center">
+          No se pudieron cargar los servicios de Firebase. Revisa la consola para más detalles.
+        </p>
+      </div>
+     );
   }
 
   return (
