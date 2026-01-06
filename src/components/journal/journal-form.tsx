@@ -47,7 +47,7 @@ const formSchema = z.object({
 type JournalFormData = z.infer<typeof formSchema>;
 
 interface JournalFormProps {
-  entry?: JournalEntry;
+  entry?: JournalEntry | null;
   onSave?: () => void;
   isModal?: boolean;
 }
@@ -75,16 +75,18 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   useEffect(() => {
     if (entry) {
       console.log('Cargando datos en editor...', entry);
+      
       const valuesToSet: Partial<JournalFormData> = {
-        bibleBook: entry.bibleBook,
-        chapter: entry.chapter,
-        bibleVerse: entry.bibleVerse,
-        verseText: entry.verseText,
-        observation: entry.observation,
-        teaching: entry.teaching,
-        practicalApplication: entry.practicalApplication,
+        bibleBook: entry.bibleBook || '',
+        chapter: entry.chapter || 1,
+        bibleVerse: entry.bibleVerse || '',
+        verseText: entry.verseText || '',
+        observation: entry.observation || entry.observacion || '',
+        teaching: entry.teaching || entry.ensenanza || '',
+        practicalApplication: entry.practicalApplication || entry.aplicacion || entry.practica || '',
         tagIds: Array.isArray(entry.tagIds) ? entry.tagIds.join(', ') : '',
       };
+      
       form.reset(valuesToSet);
     }
   }, [entry, form]);
@@ -305,6 +307,10 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
       </form>
     </Form>
   );
+
+  if (isModal) {
+    return formContent;
+  }
 
   return (
     <div className="p-2 sm:p-4">
