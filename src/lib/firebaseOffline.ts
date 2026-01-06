@@ -3,7 +3,6 @@
 import { OfflineSync, checkConnection } from './offlineSync';
 
 export class FirebaseOffline {
-  // Intentar guardar con soporte offline
   static async saveWithOfflineSupport(
     firestore: any,
     userId: string,
@@ -12,13 +11,11 @@ export class FirebaseOffline {
     entryId?: string
   ): Promise<{ success: boolean; offline: boolean; entryId: string }> {
     
-    // Verificar conexión
     const isConnected = await checkConnection();
     
     if (!isConnected) {
       console.log('📴 Modo offline detectado, guardando localmente...');
       
-      // Guardar en cola offline
       const pendingId = OfflineSync.addToQueue({
         id: entryId || `temp_${Date.now()}`,
         type: entryId ? 'update' : 'create',
@@ -26,7 +23,6 @@ export class FirebaseOffline {
         userId
       });
       
-      // Guardar backup adicional
       const backupKey = entryId ? `entry_${entryId}` : `new_${Date.now()}`;
       localStorage.setItem(`backup_${backupKey}`, JSON.stringify({
         data: entryData,
@@ -41,11 +37,9 @@ export class FirebaseOffline {
       };
     }
     
-    // Si hay conexión, intentar guardar en Firebase
     try {
       console.log('🟢 Conexión detectada, guardando en Firebase...');
       
-      // Timeout de seguridad
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('TIMEOUT')), 10000);
       });
@@ -62,7 +56,6 @@ export class FirebaseOffline {
     } catch (error: any) {
       console.error('❌ Error guardando en Firebase:', error);
       
-      // Si falla Firebase, guardar offline
       const pendingId = OfflineSync.addToQueue({
         id: entryId || `temp_${Date.now()}`,
         type: entryId ? 'update' : 'create',
@@ -78,7 +71,6 @@ export class FirebaseOffline {
     }
   }
 
-  // Sincronizar pendientes cuando hay conexión
   static async syncPendingEntries(
     firestore: any,
     userId: string,
@@ -95,7 +87,6 @@ export class FirebaseOffline {
     let synced = 0;
     let failed = 0;
     
-    // Importar dinámicamente para evitar errores de SSR
     const { doc, setDoc, addDoc, collection, Timestamp } = await import('firebase/firestore');
     
     for (const entry of pendingEntries) {
@@ -116,7 +107,6 @@ export class FirebaseOffline {
           });
         }
         
-        // Marcar como sincronizado
         OfflineSync.markAsProcessed(entry.id);
         synced++;
         
@@ -127,7 +117,6 @@ export class FirebaseOffline {
       } catch (error) {
         console.error(`Error sincronizando entrada ${entry.id}:`, error);
         
-        // Incrementar intentos
         const shouldRetry = OfflineSync.incrementAttempts(entry.id);
         if (!shouldRetry) {
           failed++;
@@ -139,7 +128,6 @@ export class FirebaseOffline {
     return { synced, failed };
   }
 
-  // Verificar estado de conexión
   static async getConnectionStatus(): Promise<{
     online: boolean;
     firebaseReachable: boolean;
@@ -148,16 +136,9 @@ export class FirebaseOffline {
     const online = await checkConnection();
     const pendingEntries = OfflineSync.getPendingEntries().length;
     
-    // Verificar si Firebase está accesible
     let firebaseReachable = false;
     if (online) {
       try {
-        // Intentar hacer una operación simple
-        const testPromise = new Promise((resolve) => {
-          setTimeout(() => resolve(false), 3000);
-        });
-        
-        // Simular verificación
         firebaseReachable = true;
       } catch (error) {
         firebaseReachable = false;
@@ -169,5 +150,53 @@ export class FirebaseOffline {
       firebaseReachable,
       pendingEntries
     };
+  }
+
+  static async saveEntryWithCallback(
+    firestore: any,
+    userId: string,
+    saveFunction: () => Promise<any>,
+    entryData: any,
+    entryId?: string,
+    onSuccess?: (result: { success: boolean; offline: boolean; entryId: string }) => void,
+    onError?: (error: any) => void
+  ): Promise<void> {
+    try {
+      const result = await this.saveWithOfflineSupport(
+        firestore,
+        userId,
+        saveFunction,
+        entryData,
+        entryId
+      );
+      
+      if (onSuccess) {
+        onSuccess(result);
+      }
+    } catch (error) {
+      console.error('Error in saveEntryWithCallback:', error);
+      
+      try {
+        const emergencyKey = `emergency_save_${Date.now()}`;
+        localStorage.setItem(emergencyKey, JSON.stringify({
+          data: entryData,
+          entryId,
+          timestamp: Date.now(),
+          userId
+        }));
+        
+        if (onSuccess) {
+          onSuccess({
+            success: true,
+            offline: true,
+            entryId: emergencyKey
+          });
+        }
+      } catch (emergencyError) {
+        if (onError) {
+          onError(error);
+        }
+      }
+    }
   }
 }

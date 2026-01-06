@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Form,
@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, WifiOff, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Loader2, Save, WifiOff, CheckCircle2, RefreshCw, AlertCircle, BookOpen } from 'lucide-react';
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, addDoc, setDoc, Timestamp, collection } from 'firebase/firestore';
@@ -58,41 +58,55 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const [isSaving, setIsSaving] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  const [lastSaveInfo, setLastSaveInfo] = useState<{ time: Date; offline: boolean } | null>(null);
+  const [saveHistory, setSaveHistory] = useState<Array<{time: Date; offline: boolean; success: boolean}>>([]);
   
   const { user } = useUser();
   const firestore = useFirestore();
   const isEditing = !!entry;
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Monitorear conexión y pendientes
+  // Detectar conexión
   useEffect(() => {
-    const updateStatus = async () => {
-      const status = await FirebaseOffline.getConnectionStatus();
-      setIsOnline(status.online);
-      setPendingSyncCount(status.pendingEntries);
-      
-      if (!status.online && !isSaving) {
-        toast({
-          title: "📱 Modo offline",
-          description: `Tus cambios se guardarán localmente (${status.pendingEntries} pendientes)`,
-          duration: 5000,
-        });
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log('✅ Conexión restablecida');
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log('📴 Sin conexión');
+    };
+
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Verificar pendientes periódicamente
+  useEffect(() => {
+    const checkPending = () => {
+      if (typeof window !== 'undefined') {
+        try {
+          const pendingData = localStorage.getItem('journal_pending_sync');
+          const pending = pendingData ? JSON.parse(pendingData) : [];
+          setPendingSyncCount(pending.length);
+        } catch (error) {
+          console.error('Error checking pending:', error);
+        }
       }
     };
 
-    updateStatus();
+    checkPending();
+    const interval = setInterval(checkPending, 10000);
     
-    const interval = setInterval(updateStatus, 10000); // Actualizar cada 10 segundos
-    
-    window.addEventListener('online', updateStatus);
-    window.addEventListener('offline', updateStatus);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('online', updateStatus);
-      window.removeEventListener('offline', updateStatus);
-    };
-  }, [toast, isSaving]);
+    return () => clearInterval(interval);
+  }, []);
 
   const form = useForm<JournalFormValues>({
     resolver: zodResolver(FormSchema),
@@ -111,8 +125,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   // Cargar datos
   useEffect(() => {
     if (entry) {
-      const parts = entry.bibleVerse.split(':');
-      const verseOnly = parts.length > 1 ? parts[parts.length - 1] : '';
+      const parts = entry.bibleVerse?.split(':') || [];
+      const verseOnly = parts.length > 1 ? parts[parts.length - 1] : entry.bibleVerse || '';
 
       form.reset({
         bibleBook: entry.bibleBook || '',
@@ -127,164 +141,267 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     }
   }, [entry, form]);
 
-  // Sincronizar pendientes manualmente
+  // Sincronizar pendientes
   const syncPending = useCallback(async () => {
     if (!user || !firestore || pendingSyncCount === 0) return;
 
     setIsSaving(true);
+    
     toast({
       title: "🔄 Sincronizando...",
-      description: "Sincronizando cambios pendientes",
+      description: `Sincronizando ${pendingSyncCount} cambios pendientes`,
     });
 
-    const result = await FirebaseOffline.syncPendingEntries(
-      firestore,
-      user.uid,
-      (current, total) => {
+    try {
+      const result = await FirebaseOffline.syncPendingEntries(
+        firestore,
+        user.uid,
+        (current, total) => {
+          console.log(`Progreso: ${current}/${total}`);
+        }
+      );
+
+      setPendingSyncCount(result.failed);
+
+      if (result.synced > 0) {
         toast({
-          title: `Sincronizando...`,
-          description: `${current} de ${total} completados`,
+          title: "✅ Sincronizado",
+          description: `${result.synced} cambios sincronizados exitosamente`,
+          duration: 4000,
+        });
+        
+        // Agregar al historial
+        setSaveHistory(prev => [...prev, {
+          time: new Date(),
+          offline: false,
+          success: true
+        }]);
+      }
+
+      if (result.failed > 0) {
+        toast({
+          variant: "destructive",
+          title: "⚠️ Sincronización parcial",
+          description: `${result.failed} cambios no se pudieron sincronizar`,
+          duration: 5000,
         });
       }
-    );
 
-    setIsSaving(false);
-    setPendingSyncCount(result.failed); // Actualizar con los fallidos restantes
-
-    if (result.synced > 0) {
-      toast({
-        title: "✅ Sincronizado",
-        description: `${result.synced} cambios sincronizados exitosamente`,
-        duration: 4000,
-      });
-    }
-
-    if (result.failed > 0) {
+    } catch (error) {
+      console.error('Error sincronizando:', error);
       toast({
         variant: "destructive",
-        title: "⚠️ Sincronización parcial",
-        description: `${result.failed} cambios no se pudieron sincronizar`,
-        duration: 5000,
+        title: "❌ Error",
+        description: "No se pudo completar la sincronización",
       });
+    } finally {
+      setIsSaving(false);
     }
   }, [user, firestore, pendingSyncCount, toast]);
 
-  // Función principal de guardado
-  const handleSave = async (data: JournalFormValues) => {
+  // Función principal de guardado - FIXED
+  const handleSave = async (data: JournalFormValues): Promise<{success: boolean; offline: boolean}> => {
     if (!user || !firestore) {
       toast({
         variant: "destructive",
         title: "Error",
         description: "Usuario no autenticado",
       });
-      return;
+      return { success: false, offline: false };
     }
 
     setIsSaving(true);
 
-    try {
-      const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
-      const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
-      
-      const entryData = {
-        bibleBook: data.bibleBook,
-        chapter: data.chapter,
-        bibleVerse: fullBibleVerse,
-        verseText: data.verseText,
-        tagIds: tags,
-        observation: data.observation,
-        teaching: data.teaching,
-        practicalApplication: data.practicalApplication,
-        userId: user.uid,
-        updatedAt: Timestamp.now()
-      };
-
-      // Preparar función de guardado para Firebase
-      const saveFunction = async () => {
-        if (isEditing && entry?.id) {
-          const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-          return await setDoc(entryRef, entryData, { merge: true });
-        } else {
-          const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-          return await addDoc(entriesCollection, { 
-            ...entryData, 
-            createdAt: Timestamp.now() 
-          });
-        }
-      };
-
-      // Usar el sistema offline
-      const result = await FirebaseOffline.saveWithOfflineSupport(
-        firestore,
-        user.uid,
-        saveFunction,
-        entryData,
-        entry?.id
-      );
-
-      // Actualizar estado
-      setLastSaveInfo({
-        time: new Date(),
-        offline: result.offline
-      });
-
-      setPendingSyncCount(prev => result.offline ? prev + 1 : prev);
-
-      // Mostrar mensaje apropiado
-      if (result.offline) {
-        toast({
-          title: "📱 Guardado local",
-          description: "Los cambios se guardaron en tu dispositivo. Se sincronizarán automáticamente.",
-          duration: 6000,
-        });
-      } else {
-        toast({
-          title: "✅ ¡Guardado!",
-          description: "Tu entrada se ha guardado exitosamente.",
-          duration: 4000,
-        });
-      }
-
-      // Si fue guardado exitoso y no es offline, refrescar
-      if (result.success && !result.offline) {
-        if (onSave) onSave();
-        router.refresh();
-      }
-
-    } catch (error: any) {
-      console.error("Error en guardado:", error);
-      
-      // Intentar guardar como último recurso
+    return new Promise((resolve) => {
       try {
-        const backupKey = `emergency_${Date.now()}`;
-        localStorage.setItem(backupKey, JSON.stringify(data));
+        // Preparar datos
+        const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
+        const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
         
-        toast({
-          title: "⚠️ Guardado de emergencia",
-          description: "Los cambios se guardaron localmente como precaución.",
-          duration: 6000,
-        });
+        const entryData = {
+          bibleBook: data.bibleBook,
+          chapter: data.chapter,
+          bibleVerse: fullBibleVerse,
+          verseText: data.verseText,
+          tagIds: tags,
+          observation: data.observation,
+          teaching: data.teaching,
+          practicalApplication: data.practicalApplication,
+          userId: user.uid,
+          updatedAt: Timestamp.now()
+        };
+
+        // Preparar función de guardado
+        const saveFunction = async () => {
+          if (isEditing && entry?.id) {
+            const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
+            return await setDoc(entryRef, entryData, { merge: true });
+          } else {
+            const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
+            return await addDoc(entriesCollection, { 
+              ...entryData, 
+              createdAt: Timestamp.now() 
+            });
+          }
+        };
+
+        // Usar callback para manejar resultado
+        FirebaseOffline.saveEntryWithCallback(
+          firestore,
+          user.uid,
+          saveFunction,
+          entryData,
+          entry?.id,
+          (result) => {
+            // AGREGAR AL HISTORIAL
+            setSaveHistory(prev => [...prev, {
+              time: new Date(),
+              offline: result.offline,
+              success: result.success
+            }]);
+
+            // ACTUALIZAR CONTADOR
+            if (result.offline) {
+              setPendingSyncCount(prev => prev + 1);
+            }
+
+            // MOSTRAR MENSAJE
+            if (result.offline) {
+              toast({
+                title: "📱 Guardado local",
+                description: "Los cambios se guardaron en tu dispositivo. Se sincronizarán automáticamente.",
+                duration: 6000,
+              });
+            } else {
+              toast({
+                title: "✅ ¡Guardado!",
+                description: "Tu entrada se ha guardado exitosamente.",
+                duration: 4000,
+              });
+            }
+
+            setIsSaving(false);
+            resolve({ success: result.success, offline: result.offline });
+
+            // SOLO REDIRIGIR SI ES ONLINE Y ÉXITO
+            if (result.success && !result.offline) {
+              // Pequeño delay antes de redirigir
+              setTimeout(() => {
+                if (onSave) onSave();
+                if (!isModal) {
+                  router.push('/journal');
+                }
+              }, 1500);
+            }
+          },
+          (error) => {
+            console.error('Error en callback:', error);
+            
+            // Guardado de emergencia
+            const emergencyKey = `emergency_${Date.now()}`;
+            localStorage.setItem(emergencyKey, JSON.stringify({
+              formData: data,
+              timestamp: Date.now(),
+              error: error.message
+            }));
+            
+            toast({
+              title: "⚠️ Guardado de emergencia",
+              description: "Los cambios se guardaron localmente como precaución.",
+              duration: 6000,
+            });
+            
+            setSaveHistory(prev => [...prev, {
+              time: new Date(),
+              offline: true,
+              success: true
+            }]);
+            
+            setIsSaving(false);
+            resolve({ success: true, offline: true });
+          }
+        );
+
+      } catch (error: any) {
+        console.error("Error en handleSave:", error);
         
-        setLastSaveInfo({
-          time: new Date(),
-          offline: true
-        });
-        
-      } catch (backupError) {
         toast({
           variant: "destructive",
           title: "❌ Error crítico",
           description: "No se pudo guardar. Intenta copiar tu contenido.",
           duration: 7000,
         });
+        
+        setIsSaving(false);
+        resolve({ success: false, offline: false });
       }
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   const onSubmit = async (data: JournalFormValues) => {
-    await handleSave(data);
+    // Limpiar timeout anterior
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    const result = await handleSave(data);
+    
+    // Si es offline, NO redirigir inmediatamente
+    if (result.offline && !isModal) {
+      // Esperar 3 segundos antes de mostrar opción de volver
+      saveTimeoutRef.current = setTimeout(() => {
+        toast({
+          title: "¿Qué quieres hacer?",
+          description: "Los cambios se guardaron localmente.",
+          duration: 8000,
+          action: (
+            <div className="flex gap-2 mt-2">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => router.push('/journal')}
+              >
+                Ver entradas
+              </Button>
+              <Button 
+                size="sm"
+                onClick={() => window.location.reload()}
+              >
+                Seguir editando
+              </Button>
+            </div>
+          ),
+        });
+      }, 3000);
+    }
+  };
+
+  // Componente de estado
+  const StatusIndicator = () => {
+    if (isSaving) {
+      return (
+        <span className="text-xs text-blue-600 flex items-center gap-1">
+          <Loader2 className="h-3 w-3 animate-spin"/>
+          {isOnline ? 'Guardando...' : 'Guardando localmente...'}
+        </span>
+      );
+    }
+    
+    if (!isOnline) {
+      return (
+        <span className="text-xs text-amber-600 flex items-center gap-1">
+          <WifiOff className="h-3 w-3"/>
+          Offline {pendingSyncCount > 0 && `(${pendingSyncCount} pendientes)`}
+        </span>
+      );
+    }
+    
+    return (
+      <span className="text-xs text-green-600 flex items-center gap-1">
+        <CheckCircle2 className="h-3 w-3"/>
+        En línea {pendingSyncCount > 0 && `(${pendingSyncCount} pendientes)`}
+      </span>
+    );
   };
 
   const formContent = (
@@ -294,42 +411,36 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
         {/* Barra de estado */}
         <div className="flex flex-wrap justify-between items-center bg-muted/30 p-3 rounded-md mb-4 gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Estado:</span>
-            {isOnline ? (
-              <span className="text-xs text-green-600 flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3"/>
-                En línea
-              </span>
-            ) : (
-              <span className="text-xs text-amber-600 flex items-center gap-1">
-                <WifiOff className="h-3 w-3"/>
-                Offline
-              </span>
-            )}
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Diario Bíblico</span>
           </div>
           
-          {pendingSyncCount > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={syncPending}
-              disabled={isSaving || !isOnline}
-              className="text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Sincronizar ({pendingSyncCount})
-            </Button>
-          )}
+          <div className="flex items-center gap-4">
+            <StatusIndicator />
+            
+            {pendingSyncCount > 0 && isOnline && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={syncPending}
+                disabled={isSaving}
+                className="text-xs h-7"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Sincronizar
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Información del último guardado */}
-        {lastSaveInfo && (
-          <div className={`p-3 rounded-md ${lastSaveInfo.offline ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-200'}`}>
-            <p className={`text-sm ${lastSaveInfo.offline ? 'text-amber-800' : 'text-green-800'}`}>
-              {lastSaveInfo.offline ? '📱 ' : '✅ '}
-              Último guardado: {lastSaveInfo.time.toLocaleTimeString()} 
-              {lastSaveInfo.offline ? ' (local)' : ''}
+        {/* Historial reciente */}
+        {saveHistory.length > 0 && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-sm text-blue-800">
+              📋 Historial: {saveHistory.filter(s => s.success).length} guardados exitosos
+              {saveHistory.filter(s => s.offline).length > 0 && 
+                ` (${saveHistory.filter(s => s.offline).length} offline)`}
             </p>
           </div>
         )}
@@ -341,7 +452,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             name="bibleBook"
             render={({ field }) => (
               <FormItem className="sm:col-span-3">
-                <FormLabel>Libro</FormLabel>
+                <FormLabel>Libro *</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
@@ -364,7 +475,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             name="chapter"
             render={({ field }) => (
               <FormItem className="sm:col-span-1">
-                <FormLabel>Capítulo</FormLabel>
+                <FormLabel>Capítulo *</FormLabel>
                 <FormControl>
                   <Input 
                     type="number" 
@@ -383,7 +494,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             name="bibleVerse"
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel>Versículos</FormLabel>
+                <FormLabel>Versículos *</FormLabel>
                 <FormControl>
                   <Input placeholder="Ej: 1-4" {...field} />
                 </FormControl>
@@ -398,7 +509,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           name="verseText"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Texto del Versículo</FormLabel>
+              <FormLabel>Texto del Versículo *</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Escribe el texto del versículo..."
@@ -416,7 +527,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           name="observation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Observación</FormLabel>
+              <FormLabel>Observación (O - Observation) *</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="¿Qué dice el texto?..."
@@ -434,7 +545,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           name="teaching"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Enseñanza</FormLabel>
+              <FormLabel>Enseñanza *</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="¿Qué verdad espiritual...?"
@@ -452,7 +563,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           name="practicalApplication"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Aplicación Práctica</FormLabel>
+              <FormLabel>Aplicación Práctica *</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="¿Cómo puedo poner por obra...?"
@@ -480,19 +591,27 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
           )}
         />
 
-        <div className="flex flex-col sm:flex-row justify-end gap-3 items-center pt-4 border-t">
+        <div className="flex flex-col sm:flex-row justify-end gap-3 items-center pt-6 border-t">
           <div className="text-sm text-muted-foreground mr-0 sm:mr-4">
             {isOnline ? '✅ Conectado' : '📱 Modo offline'}
+            {pendingSyncCount > 0 && ` • ${pendingSyncCount} pendientes`}
           </div>
 
           <div className="flex gap-2 w-full sm:w-auto">
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => router.back()}
+              onClick={() => {
+                if (isModal && onSave) {
+                  onSave();
+                } else {
+                  router.push('/journal');
+                }
+              }}
               className="flex-1 sm:flex-none"
+              disabled={isSaving}
             >
-              Cancelar
+              {isModal ? 'Cancelar' : 'Volver'}
             </Button>
             <Button 
               type="submit" 
@@ -502,13 +621,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isOnline ? 'Guardando...' : 'Guardando localmente...'}
+                  {isOnline ? 'Guardando...' : 'Guardando local...'}
                 </>
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
                   {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
-                  {!isOnline && " (Offline)"}
                 </>
               )}
             </Button>
@@ -525,7 +643,10 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isEditing ? 'Editar Entrada' : 'Nueva Entrada'}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <BookOpen className="h-6 w-6" />
+          {isEditing ? 'Editar Entrada' : 'Nueva Entrada'}
+        </CardTitle>
         <CardDescription>
           Utiliza el método S.O.A.P para tu estudio bíblico.
           {!isOnline && " (Trabajando en modo offline)"}
