@@ -49,16 +49,17 @@ export function RichTextEditor({ value = '', onChange, placeholder }: RichTextEd
 
   useEffect(() => {
     if (!editor || !isMounted) return;
-
+  
     const isSame = editor.getHTML() === value;
-    if (isSame) return;
+  
+    if (isSame) {
+      return;
+    }
+  
+    // When the value prop changes, update the editor's content.
+    // This is crucial for react-hook-form's reset() method to work.
+    editor.commands.setContent(value, false);
     
-    // Use `setTimeout` to ensure this runs after the current render cycle,
-    // which can help with timing issues related to form resets.
-    setTimeout(() => {
-        editor.commands.setContent(value, false);
-    }, 0);
-
   }, [value, editor, isMounted]);
 
   if (!isMounted || !editor) {
