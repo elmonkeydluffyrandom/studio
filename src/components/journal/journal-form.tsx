@@ -1,9 +1,9 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form'; // Agregamos useWatch
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useTransition } from 'react';
+import { useEffect, useState, useCallback, useTransition } from 'react'; // Agregamos useCallback y useState
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
@@ -26,16 +26,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Cloud, CloudOff, CheckCircle2 } from 'lucide-react'; // Nuevos iconos
 import type { JournalEntry } from '@/lib/types';
 import { useUser, useFirestore } from '@/firebase';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { collection, doc, addDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, addDoc, setDoc, Timestamp, collection } from 'firebase/firestore';
 import { BIBLE_BOOKS } from '@/lib/bible-books';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-// Importación dinámica del editor
 const RichTextEditor = dynamic(() => import('../rich-text-editor').then((mod) => mod.RichTextEditor), { ssr: false });
 
 const FormSchema = z.object({
@@ -61,6 +58,9 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  
   const { user } = useUser();
   const firestore = useFirestore();
   const isEditing = !!entry;
@@ -80,144 +80,172 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
     resolver: zodResolver(FormSchema),
     defaultValues: defaultFormValues,
   });
-  
-  // Efecto estándar de React Hook Form
+
+  // Vigilar cambios para el autoguardado
+  const watchedValues = useWatch({ control: form.control });
+
+  // 1. Carga de datos iniciales
   useEffect(() => {
     if (entry) {
-      console.log('Cargando datos básicos...', entry);
-      
-      // 1. Lógica más segura para extraer solo los números del versículo
-      // Si la cita es "Génesis 1:1-5", esto separa por ":" y toma lo último ("1-5")
       const parts = entry.bibleVerse.split(':');
       const verseOnly = parts.length > 1 ? parts[parts.length - 1] : '';
 
-      // 2. Usamos setValue para forzar que cada campo tenga su dato
       form.setValue('bibleBook', entry.bibleBook || '');
-      form.setValue('chapter', Number(entry.chapter)); // Aseguramos que sea número
+      form.setValue('chapter', Number(entry.chapter));
       form.setValue('bibleVerse', verseOnly);
       form.setValue('verseText', entry.verseText || '');
       form.setValue('tagIds', entry.tagIds?.join(', ') || '');
       
-      // También actualizamos el estado interno de los campos ricos
       form.setValue('observation', entry.observation || '');
       form.setValue('teaching', entry.teaching || '');
       form.setValue('practicalApplication', entry.practicalApplication || '');
-
-    } else {
-       // Si es nueva entrada, limpiar todo
-       form.reset(defaultFormValues);
     }
-  }, [entry, form.setValue, form.reset]);
+  }, [entry, form.setValue]);
 
-  // --- SOLUCIÓN MANUAL DE INYECCIÓN ---
+  // 2. Inyección Manual (Para ver los datos al cargar)
   useEffect(() => {
     if (entry) {
-      // Esperamos un momento a que el editor se renderice
       const timer = setTimeout(() => {
-        // Función auxiliar para inyectar texto
         const injectText = (containerId: string, text: string) => {
           const container = document.getElementById(containerId);
           if (container) {
-            // Buscamos el div editable DENTRO de nuestro contenedor
             const editableDiv = container.querySelector('[contenteditable="true"]');
-            if (editableDiv) {
-              editableDiv.innerHTML = text;
-            }
+            if (editableDiv) editableDiv.innerHTML = text;
           }
         };
 
         if (entry.observation) injectText('wrapper-observation', entry.observation);
         if (entry.teaching) injectText('wrapper-teaching', entry.teaching);
         if (entry.practicalApplication) injectText('wrapper-application', entry.practicalApplication);
-        
-        console.log("Inyección manual completada.");
-      }, 800); // 800ms de espera para asegurar carga
-
+      }, 800);
       return () => clearTimeout(timer);
     }
   }, [entry]);
 
 
-  const onSubmit = (data: JournalFormValues) => {
-    if (!user || !firestore) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Debes iniciar sesión.' });
-        return;
-    }
+  // --- LÓGICA CENTRAL DE GUARDADO (Reutilizable) ---
+  const performSave = useCallback(async (data: JournalFormValues, isAutoSave: boolean = false) => {
+    if (!user || !firestore) return;
 
-    // --- EXTRACCIÓN MANUAL DE DATOS (El "Puente" de Guardado) ---
-    // Leemos directamente del HTML lo que el usuario escribió
+    // Extracción Manual del HTML (Lo que ves es lo que guardas)
     const getManualContent = (wrapperId: string, fallback: string) => {
         const wrapper = document.getElementById(wrapperId);
         const editable = wrapper?.querySelector('[contenteditable="true"]');
-        // Si encontramos el div editable, devolvemos su HTML (lo que se ve). Si no, usamos el fallback.
         return editable ? editable.innerHTML : fallback;
     };
 
-    // Sobrescribimos los datos del formulario con los visuales
     const finalObservation = getManualContent('wrapper-observation', data.observation);
     const finalTeaching = getManualContent('wrapper-teaching', data.teaching);
     const finalApplication = getManualContent('wrapper-application', data.practicalApplication);
-    // ------------------------------------------------------------
 
-    startTransition(() => {
-        const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
-        const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
+    const tags = data.tagIds?.split(',').map(tag => tag.trim()).filter(tag => tag) || [];
+    const fullBibleVerse = `${data.bibleBook} ${data.chapter}:${data.bibleVerse}`;
+    
+    const entryData = { 
+        ...data, 
+        bibleVerse: fullBibleVerse, 
+        tagIds: tags,
+        observation: finalObservation,
+        teaching: finalTeaching,
+        practicalApplication: finalApplication
+    };
+
+    try {
+        setSaveStatus('saving');
         
-        // Usamos las variables "final..." que acabamos de leer
-        const entryData = { 
-            ...data, 
-            bibleVerse: fullBibleVerse, 
-            tagIds: tags,
-            observation: finalObservation,        // <--- Dato visual real
-            teaching: finalTeaching,              // <--- Dato visual real
-            practicalApplication: finalApplication // <--- Dato visual real
-        };
-
         if (isEditing && entry?.id) {
             const entryRef = doc(firestore, 'users', user.uid, 'journalEntries', entry.id);
-            setDoc(entryRef, { ...entryData, updatedAt: Timestamp.now() }, { merge: true })
-            .then(() => {
-                toast({ title: 'Actualizado', description: 'Entrada guardada.' });
-                if (onSave) onSave();
-                router.refresh();
-            })
-            .catch((error) => {
-                console.error("Error updating:", error);
-                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar.' });
-            });
+            await setDoc(entryRef, { ...entryData, updatedAt: Timestamp.now() }, { merge: true });
         } else {
+            // Si es nueva, no podemos autoguardar hasta que se cree la primera vez manualmente
+            if (isAutoSave && !entry?.id) {
+                // Si es autoguardado de una entrada NUEVA que aun no tiene ID, lo saltamos
+                // para evitar crear duplicados infinitos.
+                setSaveStatus('idle');
+                return; 
+            }
             const entriesCollection = collection(firestore, 'users', user.uid, 'journalEntries');
-            addDoc(entriesCollection, { ...entryData, createdAt: Timestamp.now() })
-            .then(() => {
-                toast({ title: 'Creado', description: 'Entrada guardada.' });
-                if (onSave) onSave();
-                else router.push(`/`);
-            })
-            .catch((error) => {
-                console.error("Error creating:", error);
-                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo crear.' });
-            });
+            await addDoc(entriesCollection, { ...entryData, createdAt: Timestamp.now() });
         }
+
+        setSaveStatus('saved');
+        setLastSavedTime(new Date());
+
+        // Solo mostramos Toast si fue clic manual, para no spamear en autoguardado
+        if (!isAutoSave) {
+            toast({ title: '¡Guardado!', description: 'Tu entrada se ha actualizado exitosamente.' });
+            if (onSave) onSave();
+            router.refresh();
+        }
+
+    } catch (error) {
+        console.error("Error saving:", error);
+        setSaveStatus('error');
+        if (!isAutoSave) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar.' });
+        }
+    }
+  }, [user, firestore, isEditing, entry, onSave, router, toast]);
+
+
+  // --- AUTOGUARDADO (Debounce) ---
+  useEffect(() => {
+    // Si no estamos editando (es nueva entrada), no autoguardamos para no llenar la DB de borradores vacíos
+    // Opcional: Podrías habilitarlo si manejas IDs temporales, pero por seguridad, mejor solo en edición.
+    if (!isEditing) return; 
+
+    // Esperar 3 segundos después de que el usuario deje de escribir
+    const timer = setTimeout(() => {
+        const currentValues = form.getValues();
+        // Verificamos que haya datos mínimos para intentar guardar
+        if (currentValues.bibleBook && currentValues.chapter) {
+            performSave(currentValues, true); // true = es autoguardado
+        }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [watchedValues, isEditing, performSave, form]);
+
+
+  // Envío Manual (Botón)
+  const onSubmit = (data: JournalFormValues) => {
+    startTransition(() => {
+        performSave(data, false); // false = guardado manual
     });
+  };
+
+  // Componente visual de estado
+  const StatusIndicator = () => {
+    if (saveStatus === 'saving') {
+        return <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Guardando...</span>;
+    }
+    if (saveStatus === 'saved') {
+        return <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3"/> Guardado {lastSavedTime?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>;
+    }
+    if (saveStatus === 'error') {
+        return <span className="text-xs text-red-500 flex items-center gap-1"><CloudOff className="h-3 w-3"/> Error al guardar</span>;
+    }
+    return <span className="text-xs text-muted-foreground flex items-center gap-1"><Cloud className="h-3 w-3"/> Listo</span>;
   };
 
   const formContent = (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
+        {/* Barra de estado superior */}
+        <div className="flex justify-between items-center bg-muted/30 p-2 rounded-md mb-4">
+             <span className="text-xs font-medium text-muted-foreground">Estado de sincronización:</span>
+             <StatusIndicator />
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-6 sm:gap-4 space-y-6 sm:space-y-0">
-        <FormField
+            <FormField
             control={form.control}
             name="bibleBook"
             render={({ field }) => (
                 <FormItem className="sm:col-span-3">
                 <FormLabel>Libro</FormLabel>
-                {/* TRUCO: La 'key' obliga al componente a actualizarse cuando llega el dato */}
-                <Select 
-                    key={field.value} 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                >
+                <Select key={field.value} onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                     <SelectTrigger>
                         <SelectValue placeholder="Selecciona un libro..." />
@@ -281,7 +309,7 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             )}
         />
 
-        {/* CAMPOS CON WRAPPER PARA INYECCIÓN MANUAL */}
+        {/* CAMPOS RICOS */}
         
         <FormField
             control={form.control}
@@ -290,7 +318,6 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             <FormItem>
                 <FormLabel>Observación (O - Observation)</FormLabel>
                 <FormControl>
-                {/* Wrapper ID para encontrarlo desde JS */}
                 <div id="wrapper-observation">
                     <RichTextEditor
                         placeholder="¿Qué dice el texto?..."
@@ -356,7 +383,12 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
             )}
         />
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 items-center">
+            {/* Indicador también cerca del botón */}
+            <div className="mr-4 hidden sm:block">
+                <StatusIndicator />
+            </div>
+
             {isModal ? (
                 <Button type="button" variant="outline" onClick={onSave}>
                     Cancelar
@@ -366,8 +398,8 @@ export default function JournalForm({ entry, onSave, isModal = false }: JournalF
                     Cancelar
                 </Button>
             )}
-            <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            <Button type="submit" disabled={isPending || saveStatus === 'saving'} className="w-full sm:w-auto">
+            {isPending || saveStatus === 'saving' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isEditing ? 'Guardar Cambios' : 'Crear Entrada'}
             </Button>
         </div>

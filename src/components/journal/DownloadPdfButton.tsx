@@ -131,10 +131,17 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
 
             doc.setTextColor(15, 23, 42); 
             doc.setFont('times', 'bold');
-            doc.setFontSize(13);
-            doc.text(sectionTitle, margin, y);
+            // ============ CAMBIO 1: Tamaño 15pt ============
+            doc.setFontSize(15); // Cambiado de 13 a 15
+            // ============ CAMBIO 2: Solo mostrar el título sin traducción ============
+            // Si el título tiene paréntesis, mostrar solo lo que está antes
+            let displayTitle = sectionTitle;
+            if (sectionTitle.includes('(')) {
+                displayTitle = sectionTitle.split('(')[0].trim();
+            }
+            doc.text(displayTitle, margin, y);
+            // ============ FIN DE CAMBIOS ============
             
-            // AJUSTE 1: Reducimos el espacio entre Título y Texto (Antes era 4)
             y += 2; 
 
             // Renderizar Contenido
@@ -240,10 +247,11 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
                 }
             }
 
-            // AJUSTE 2: Aumentamos el espacio entre el final del texto y el SIGUIENTE título (Antes era 8)
             y += 15;
         };
 
+        // ============ LLAMADAS CON TÍTULOS SIMPLIFICADOS ============
+        // Pasamos los títulos completos pero addSection los procesará
         await addSection('Escritura (S - Scripture)', entry.verseText, true);
         await addSection('Observación (O - Observation)', entry.observation);
         await addSection('Enseñanza', entry.teaching);
@@ -253,9 +261,6 @@ export default function DownloadPdfButton({ entry, entries }: DownloadPdfButtonP
     }
 
     const tempDivStyles = (div: HTMLElement) => {
-        // AJUSTE 3: Padding superior reducido a 2px para "acercar" visualmente el texto al título
-        // Mantenemos 10px a los lados para evitar cortes.
-        // Mantenemos 5px abajo para los "rabitos" de las letras (g, j, p).
         div.style.padding = '2px 10px 5px 10px'; 
         div.style.boxSizing = 'border-box';
         div.style.fontFamily = '"Times New Roman", Times, serif';
